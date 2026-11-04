@@ -1,0 +1,249 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User profile information synchronized from Google Sign-In",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Unique Google user ID"
+        },
+        "name": {
+          "type": "string",
+          "description": "User display name"
+        },
+        "email": {
+          "type": "string",
+          "description": "User email address"
+        },
+        "photoUrl": {
+          "type": "string",
+          "description": "URL of the user profile avatar"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp when user was created. Must use FieldValue.serverTimestamp()"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp when user was last updated. Must use FieldValue.serverTimestamp()"
+        }
+      },
+      "required": ["userId", "name", "email", "createdAt"]
+    },
+    "UserSecurity": {
+      "title": "UserSecurity",
+      "description": "User security settings including hashed PIN and auto-lock preferences",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Owner user ID"
+        },
+        "hashedPin": {
+          "type": "string",
+          "description": "Salted SHA-256 hash of the 4 or 6 digit PIN"
+        },
+        "pinSalt": {
+          "type": "string",
+          "description": "Cryptographic salt for PIN hashing"
+        },
+        "autoLockEnabled": {
+          "type": "boolean",
+          "description": "Whether auto-locking after inactivity is enabled"
+        },
+        "autoLockMinutes": {
+          "type": "integer",
+          "description": "Duration in minutes before locking"
+        },
+        "pinUpdatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp when PIN was last changed"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp of creation"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp of last update"
+        }
+      },
+      "required": ["userId", "hashedPin", "pinSalt", "autoLockEnabled", "autoLockMinutes", "createdAt"]
+    },
+    "PublicExpense": {
+      "title": "PublicExpense",
+      "description": "Shared household and family expenses visible to all authorized family members",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Owner or creator user ID"
+        },
+        "creatorName": {
+          "type": "string",
+          "description": "Display name of the creator"
+        },
+        "creatorEmail": {
+          "type": "string",
+          "description": "Email address of the creator"
+        },
+        "expenseType": {
+          "type": "string",
+          "description": "Always 'public'"
+        },
+        "category": {
+          "type": "string",
+          "description": "Category such as Food, Groceries, Rent, Electricity, Transportation, etc."
+        },
+        "title": {
+          "type": "string",
+          "description": "Title or short description of the expense"
+        },
+        "amount": {
+          "type": "number",
+          "description": "Expense monetary amount"
+        },
+        "date": {
+          "type": "string",
+          "description": "Date formatted as YYYY-MM-DD"
+        },
+        "paymentMethod": {
+          "type": "string",
+          "description": "Payment method such as Cash, Card, Bank, Mobile Banking"
+        },
+        "notes": {
+          "type": "string",
+          "description": "Optional notes or details"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of creation"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of last modification"
+        }
+      },
+      "required": ["userId", "creatorName", "expenseType", "category", "title", "amount", "date", "paymentMethod", "createdAt"]
+    },
+    "PrivateExpense": {
+      "title": "PrivateExpense",
+      "description": "Personal and private expenses accessible strictly by the authenticated account owner",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Owner user ID"
+        },
+        "expenseType": {
+          "type": "string",
+          "description": "Always 'private'"
+        },
+        "category": {
+          "type": "string",
+          "description": "Private category such as Personal, Shopping, Personal Food, Gifts, Personal Travel, Other"
+        },
+        "title": {
+          "type": "string",
+          "description": "Title or description of the private expense"
+        },
+        "amount": {
+          "type": "number",
+          "description": "Monetary amount"
+        },
+        "date": {
+          "type": "string",
+          "description": "Date in YYYY-MM-DD"
+        },
+        "paymentMethod": {
+          "type": "string",
+          "description": "Payment method"
+        },
+        "notes": {
+          "type": "string",
+          "description": "Optional private notes"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of creation"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of modification"
+        }
+      },
+      "required": ["userId", "expenseType", "category", "title", "amount", "date", "paymentMethod", "createdAt"]
+    },
+    "Budget": {
+      "title": "Budget",
+      "description": "Monthly budget targets for overall, public, and private spending",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Owner user ID"
+        },
+        "month": {
+          "type": "string",
+          "description": "Month in YYYY-MM format"
+        },
+        "monthlyBudget": {
+          "type": "number",
+          "description": "Total combined monthly budget"
+        },
+        "publicBudget": {
+          "type": "number",
+          "description": "Budget for shared public expenses"
+        },
+        "privateBudget": {
+          "type": "number",
+          "description": "Budget for personal private expenses"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Creation timestamp"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Modification timestamp"
+        }
+      },
+      "required": ["userId", "month", "monthlyBudget", "publicBudget", "privateBudget", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "User profile collection isolated per authenticated user"
+    },
+    "/users/{userId}/security/{securityId}": {
+      "schema": "UserSecurity",
+      "description": "PIN security settings and auto-lock preferences"
+    },
+    "/users/{userId}/private_expenses/{expenseId}": {
+      "schema": "PrivateExpense",
+      "description": "Private expense records isolated strictly to the authenticated user"
+    },
+    "/public_expenses/{expenseId}": {
+      "schema": "PublicExpense",
+      "description": "Public family and household shared expenses collection"
+    },
+    "/users/{userId}/budgets/{budgetId}": {
+      "schema": "Budget",
+      "description": "Monthly budget goals per user"
+    }
+  }
+}
