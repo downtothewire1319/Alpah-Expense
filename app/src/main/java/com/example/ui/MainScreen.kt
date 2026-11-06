@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Dashboard
+import androidx.compose.material.icons.filled.FamilyRestroom
 import androidx.compose.material.icons.filled.ReceiptLong
 import androidx.compose.material.icons.filled.Savings
 import androidx.compose.material.icons.filled.Settings
@@ -48,6 +49,7 @@ import com.example.ui.components.ExpenseDialog
 import com.example.ui.components.PinKeypad
 import com.example.ui.screens.BudgetScreen
 import com.example.ui.screens.DashboardScreen
+import com.example.ui.screens.FamilyFundScreen
 import com.example.ui.screens.PublicExpensesScreen
 import com.example.ui.screens.ReportsScreen
 import com.example.ui.screens.SettingsScreen
@@ -61,6 +63,7 @@ import com.example.ui.viewmodel.ExpenseViewModel
 enum class NavigationScreen(val label: String, val icon: ImageVector) {
     DASHBOARD("Home", Icons.Default.Dashboard),
     EXPENSES("Expenses", Icons.Default.ReceiptLong),
+    FAMILY_FUND("Family Fund", Icons.Default.FamilyRestroom),
     REPORTS("Reports", Icons.Default.Summarize),
     BUDGET("Budget", Icons.Default.Savings),
     SETTINGS("Settings", Icons.Default.Settings)
@@ -99,7 +102,33 @@ fun MainScreen(
         }
     }
 
-    val screens = NavigationScreen.values().toList()
+    val screens = remember(isVaultActive) {
+        if (isVaultActive) {
+            listOf(
+                NavigationScreen.DASHBOARD,
+                NavigationScreen.EXPENSES,
+                NavigationScreen.FAMILY_FUND,
+                NavigationScreen.REPORTS,
+                NavigationScreen.SETTINGS
+            )
+        } else {
+            listOf(
+                NavigationScreen.DASHBOARD,
+                NavigationScreen.EXPENSES,
+                NavigationScreen.REPORTS,
+                NavigationScreen.BUDGET,
+                NavigationScreen.SETTINGS
+            )
+        }
+    }
+
+    LaunchedEffect(isVaultActive) {
+        if (isVaultActive && currentScreen == NavigationScreen.BUDGET) {
+            currentScreen = NavigationScreen.DASHBOARD
+        } else if (!isVaultActive && currentScreen == NavigationScreen.FAMILY_FUND) {
+            currentScreen = NavigationScreen.DASHBOARD
+        }
+    }
 
     if (isTablet) {
         Row(modifier = Modifier.fillMaxSize()) {
@@ -110,6 +139,7 @@ fun MainScreen(
                 screens.forEach { screen ->
                     val isSelected = currentScreen == screen
                     val iconTint = if (isVaultActive) AccentGold else AccentBlue
+                    val labelText = if (screen == NavigationScreen.FAMILY_FUND && isVaultActive) "Family" else screen.label
 
                     NavigationRailItem(
                         selected = isSelected,
@@ -120,13 +150,13 @@ fun MainScreen(
                         icon = {
                             Icon(
                                 imageVector = screen.icon,
-                                contentDescription = screen.label,
+                                contentDescription = labelText,
                                 tint = if (isSelected) iconTint else MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         },
                         label = {
                             Text(
-                                text = screen.label,
+                                text = labelText,
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
                                 )
@@ -143,6 +173,7 @@ fun MainScreen(
                     viewModel = viewModel,
                     coroutineScope = coroutineScope,
                     onNavigateToExpenses = { currentScreen = NavigationScreen.EXPENSES },
+                    onNavigateToFamily = { currentScreen = NavigationScreen.FAMILY_FUND },
                     onOpenAddTransaction = { showAddTransactionDialog = true },
                     onSignOutSuccess = onSignOutSuccess,
                     onRequestStealthPin = { showStealthPinDialog = true }
@@ -160,6 +191,7 @@ fun MainScreen(
                     screens.forEach { screen ->
                         val isSelected = currentScreen == screen
                         val activeColor = if (isVaultActive) AccentGold else AccentBlue
+                        val labelText = if (screen == NavigationScreen.FAMILY_FUND && isVaultActive) "Family" else screen.label
 
                         NavigationBarItem(
                             selected = isSelected,
@@ -170,14 +202,14 @@ fun MainScreen(
                             icon = {
                                 Icon(
                                     imageVector = screen.icon,
-                                    contentDescription = screen.label,
+                                    contentDescription = labelText,
                                     tint = if (isSelected) activeColor else MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.size(24.dp)
                                 )
                             },
                             label = {
                                 Text(
-                                    text = screen.label,
+                                    text = labelText,
                                     style = MaterialTheme.typography.labelSmall.copy(
                                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                                         fontSize = 11.sp
@@ -203,6 +235,7 @@ fun MainScreen(
                     viewModel = viewModel,
                     coroutineScope = coroutineScope,
                     onNavigateToExpenses = { currentScreen = NavigationScreen.EXPENSES },
+                    onNavigateToFamily = { currentScreen = NavigationScreen.FAMILY_FUND },
                     onOpenAddTransaction = { showAddTransactionDialog = true },
                     onSignOutSuccess = onSignOutSuccess,
                     onRequestStealthPin = { showStealthPinDialog = true }
@@ -304,6 +337,7 @@ private fun ScreenContent(
     viewModel: ExpenseViewModel,
     coroutineScope: kotlinx.coroutines.CoroutineScope,
     onNavigateToExpenses: () -> Unit,
+    onNavigateToFamily: () -> Unit,
     onOpenAddTransaction: () -> Unit,
     onSignOutSuccess: () -> Unit,
     onRequestStealthPin: () -> Unit
@@ -312,10 +346,15 @@ private fun ScreenContent(
         NavigationScreen.DASHBOARD -> DashboardScreen(
             viewModel = viewModel,
             onNavigateToExpenses = onNavigateToExpenses,
+            onNavigateToFamily = onNavigateToFamily,
             onOpenAddTransaction = onOpenAddTransaction,
             onRequestPinUnlock = onRequestStealthPin
         )
         NavigationScreen.EXPENSES -> PublicExpensesScreen(viewModel = viewModel)
+        NavigationScreen.FAMILY_FUND -> FamilyFundScreen(
+            viewModel = viewModel,
+            onRequestPinUnlock = onRequestStealthPin
+        )
         NavigationScreen.REPORTS -> ReportsScreen(viewModel = viewModel)
         NavigationScreen.BUDGET -> BudgetScreen(viewModel = viewModel)
         NavigationScreen.SETTINGS -> SettingsScreen(

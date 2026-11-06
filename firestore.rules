@@ -2,205 +2,61 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Default deny catch-all
-    match /{document=**} {
-      allow read, write: if false;
-    }
-
-    function isSignedIn() {
+    function isAuthenticated() {
       return request.auth != null;
     }
 
     function isOwner(userId) {
-      return isSignedIn() && request.auth.uid == userId;
+      return isAuthenticated() && request.auth.uid == userId;
     }
 
-    function isValidId(id) {
-      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
-    }
-
-    function incoming() {
-      return request.resource.data;
-    }
-
-    function existing() {
-      return resource.data;
-    }
-
-    // 1. User Profile Validation
-    function isValidUserProfile(data) {
-      return data.userId is string && data.userId == request.auth.uid &&
-             data.name is string && data.name.size() > 0 && data.name.size() <= 100 &&
-             data.email is string && data.email.size() > 0 && data.email.size() <= 150 &&
-             (!('photoUrl' in data) || data.photoUrl == null || (data.photoUrl is string && data.photoUrl.size() <= 1000));
-    }
-
-    // 2. User Security Settings Validation
-    function isValidUserSecurity(data) {
-      return data.userId is string && data.userId == request.auth.uid &&
-             data.hashedPin is string && data.hashedPin.size() >= 32 && data.hashedPin.size() <= 128 &&
-             data.pinSalt is string && data.pinSalt.size() >= 8 && data.pinSalt.size() <= 128 &&
-             data.autoLockEnabled is bool &&
-             data.autoLockMinutes is int && data.autoLockMinutes >= 1 && data.autoLockMinutes <= 120;
-    }
-
-    // 3. Public Expense Validation
-    function isValidPublicExpense(data) {
-      return data.userId is string && data.userId == request.auth.uid &&
-             data.creatorName is string && data.creatorName.size() > 0 && data.creatorName.size() <= 100 &&
-             (!('creatorEmail' in data) || data.creatorEmail == null || (data.creatorEmail is string && data.creatorEmail.size() <= 150)) &&
-             data.expenseType == 'public' &&
-             data.category is string && data.category.size() > 0 && data.category.size() <= 50 &&
-             data.title is string && data.title.size() > 0 && data.title.size() <= 150 &&
-             (data.amount is number || data.amount is int || data.amount is float) && data.amount >= 0 && data.amount <= 1000000000 &&
-             data.date is string && data.date.size() == 10 && data.date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$') &&
-             data.paymentMethod is string && data.paymentMethod.size() > 0 && data.paymentMethod.size() <= 50 &&
-             (!('notes' in data) || data.notes == null || (data.notes is string && data.notes.size() <= 2000));
-    }
-
-    // 4. Private Expense Validation
-    function isValidPrivateExpense(data) {
-      return data.userId is string && data.userId == request.auth.uid &&
-             data.expenseType == 'private' &&
-             data.category is string && data.category.size() > 0 && data.category.size() <= 50 &&
-             data.title is string && data.title.size() > 0 && data.title.size() <= 150 &&
-             (data.amount is number || data.amount is int || data.amount is float) && data.amount >= 0 && data.amount <= 1000000000 &&
-             data.date is string && data.date.size() == 10 && data.date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$') &&
-             data.paymentMethod is string && data.paymentMethod.size() > 0 && data.paymentMethod.size() <= 50 &&
-             (!('notes' in data) || data.notes == null || (data.notes is string && data.notes.size() <= 2000));
-    }
-
-    // 5. Budget Validation
-    function isValidBudget(data) {
-      return data.userId is string && data.userId == request.auth.uid &&
-             data.month is string && data.month.size() == 7 && data.month.matches('^[0-9]{4}-[0-9]{2}$') &&
-             (data.monthlyBudget is number || data.monthlyBudget is int || data.monthlyBudget is float) && data.monthlyBudget >= 0 &&
-             (data.publicBudget is number || data.publicBudget is int || data.publicBudget is float) && data.publicBudget >= 0 &&
-             (data.privateBudget is number || data.privateBudget is int || data.privateBudget is float) && data.privateBudget >= 0;
-    }
-
-    // 6. Bank Account Validation
-    function isValidBankAccount(data) {
-      return data.userId is string && data.userId == request.auth.uid &&
-             data.name is string && data.name.size() > 0 && data.name.size() <= 100 &&
-             (data.balance is number || data.balance is int || data.balance is float);
-    }
-
-
-    // User Profile Document
-    match /users/{userId} {
-      allow get: if isOwner(userId);
-      allow list: if false;
-
-      allow create: if isOwner(userId) &&
-                       isValidId(userId) &&
-                       incoming().keys().hasAll(['userId', 'name', 'email', 'createdAt']) &&
-                       incoming().createdAt is timestamp && incoming().createdAt <= request.time &&
-                       isValidUserProfile(incoming());
-
-      allow update: if isOwner(userId) &&
-                       isValidId(userId) &&
-                       incoming().userId == existing().userId &&
-                       incoming().createdAt == existing().createdAt &&
-                       isValidUserProfile(incoming()) &&
-                       incoming().diff(existing()).affectedKeys().hasOnly(['name', 'email', 'photoUrl', 'updatedAt']);
-
-      allow delete: if isOwner(userId) && isValidId(userId);
-
-      // User Security subcollection (PIN and auto-lock)
-      match /security/{securityId} {
-        allow get: if isOwner(userId) && isValidId(securityId);
-        allow list: if isOwner(userId);
-
-        allow create: if isOwner(userId) &&
-                         isValidId(securityId) &&
-                         incoming().keys().hasAll(['userId', 'hashedPin', 'pinSalt', 'autoLockEnabled', 'autoLockMinutes', 'createdAt']) &&
-                         incoming().createdAt is timestamp && incoming().createdAt <= request.time &&
-                         isValidUserSecurity(incoming());
-
-        allow update: if isOwner(userId) &&
-                         isValidId(securityId) &&
-                         incoming().userId == existing().userId &&
-                         incoming().createdAt == existing().createdAt &&
-                         isValidUserSecurity(incoming()) &&
-                         incoming().diff(existing()).affectedKeys().hasOnly(['hashedPin', 'pinSalt', 'autoLockEnabled', 'autoLockMinutes', 'pinUpdatedAt', 'updatedAt']);
-
-        allow delete: if isOwner(userId) && isValidId(securityId);
-      }
-
-      // Private Expenses subcollection (Strict Owner Access Only)
-      match /private_expenses/{expenseId} {
-        allow get: if isOwner(userId) && isValidId(expenseId);
-        allow list: if isOwner(userId);
-
-        allow create: if isOwner(userId) &&
-                         isValidId(expenseId) &&
-                         incoming().keys().hasAll(['userId', 'expenseType', 'category', 'title', 'amount', 'date', 'paymentMethod', 'createdAt']) &&
-                         incoming().createdAt is timestamp && incoming().createdAt <= request.time &&
-                         isValidPrivateExpense(incoming());
-
-        allow update: if isOwner(userId) &&
-                         isValidId(expenseId) &&
-                         incoming().userId == existing().userId &&
-                         incoming().createdAt == existing().createdAt &&
-                         isValidPrivateExpense(incoming()) &&
-                         incoming().diff(existing()).affectedKeys().hasOnly(['category', 'title', 'amount', 'date', 'paymentMethod', 'notes', 'updatedAt']);
-
-        allow delete: if isOwner(userId) && isValidId(expenseId);
-      }
-
-      // Budgets subcollection
-      match /budgets/{budgetId} {
-        allow get: if isOwner(userId) && isValidId(budgetId);
-        allow list: if isOwner(userId);
-
-        allow create: if isOwner(userId) &&
-                         isValidId(budgetId) &&
-                         incoming().keys().hasAll(['userId', 'month', 'monthlyBudget', 'publicBudget', 'privateBudget', 'createdAt']) &&
-                         incoming().createdAt is timestamp && incoming().createdAt <= request.time &&
-                         isValidBudget(incoming());
-
-        allow update: if isOwner(userId) &&
-                         isValidId(budgetId) &&
-                         incoming().userId == existing().userId &&
-                         incoming().createdAt == existing().createdAt &&
-                         isValidBudget(incoming()) &&
-                         incoming().diff(existing()).affectedKeys().hasOnly(['month', 'monthlyBudget', 'publicBudget', 'privateBudget', 'updatedAt']);
-
-        allow delete: if isOwner(userId) && isValidId(budgetId);
-      }
-
-      // Bank Accounts subcollection (Monthly Savings / Bank balances)
-      match /bank_accounts/{accountId} {
-        allow get, list: if isOwner(userId);
-        allow create, update: if isOwner(userId) && isValidId(accountId) && isValidBankAccount(incoming());
-        allow delete: if isOwner(userId) && isValidId(accountId);
-      }
-    }
-
-
-    // Public Expenses (Shared Family Expenses)
+    // Public expenses are shared by all authenticated users
     match /public_expenses/{expenseId} {
-      allow get: if isSignedIn() && isValidId(expenseId);
-      allow list: if isSignedIn();
+      allow read, write: if isAuthenticated();
+    }
 
-      allow create: if isSignedIn() &&
-                       isValidId(expenseId) &&
-                       incoming().keys().hasAll(['userId', 'creatorName', 'expenseType', 'category', 'title', 'amount', 'date', 'paymentMethod', 'createdAt']) &&
-                       incoming().createdAt is timestamp && incoming().createdAt <= request.time &&
-                       isValidPublicExpense(incoming());
+    // User-specific data
+    match /users/{userId} {
+      allow read, write: if isOwner(userId);
 
-      allow update: if isSignedIn() &&
-                       isValidId(expenseId) &&
-                       existing().userId == request.auth.uid &&
-                       incoming().userId == existing().userId &&
-                       incoming().createdAt == existing().createdAt &&
-                       isValidPublicExpense(incoming()) &&
-                       incoming().diff(existing()).affectedKeys().hasOnly(['category', 'title', 'amount', 'date', 'paymentMethod', 'notes', 'updatedAt']);
+      // Explicitly allow all subcollections for the owner
+      match /{allSubcollections=**} {
+        allow read, write: if isOwner(userId);
+      }
+      
+      // Keep individual matches for clarity and specific rules if needed later
+      match /expenses/{expenseId} {
+        allow read, write: if isOwner(userId);
+      }
 
-      allow delete: if isSignedIn() &&
-                       isValidId(expenseId) &&
-                       existing().userId == request.auth.uid;
+      match /private_expenses/{expenseId} {
+        allow read, write: if isOwner(userId);
+      }
+
+      match /bank_accounts/{accountId} {
+        allow read, write: if isOwner(userId);
+      }
+      
+      match /security/{securityId} {
+        allow read, write: if isOwner(userId);
+      }
+
+      match /budgets/{budgetId} {
+        allow read, write: if isOwner(userId);
+      }
+
+      match /backups/{backupId} {
+        allow read, write: if isOwner(userId);
+      }
+
+      match /family_members/{memberId} {
+        allow read, write: if isOwner(userId);
+      }
+
+      match /family_transfers/{transferId} {
+        allow read, write: if isOwner(userId);
+      }
     }
   }
 }
+

@@ -91,14 +91,14 @@ fun BudgetScreen(
         else -> emptyList()
     }
 
-    val monthPublicSpent = publicList.filter { it.date.startsWith(currentMonth) && !it.isIncome }.sumOf { it.amount }
+    val monthPublicSpent = publicList.filter { it.date.startsWith(currentMonth) && it.isActualExpense }.sumOf { it.amount }
     val monthPrivateSpent = if (isPrivateUnlocked) {
-        privateList.filter { it.date.startsWith(currentMonth) && !it.isIncome }.sumOf { it.amount }
+        privateList.filter { it.date.startsWith(currentMonth) && it.isActualExpense }.sumOf { it.amount }
     } else 0.0
 
-    val monthPublicIncome = publicList.filter { it.date.startsWith(currentMonth) && it.isIncome }.sumOf { it.amount }
+    val monthPublicIncome = publicList.filter { it.date.startsWith(currentMonth) && it.isActualIncome }.sumOf { it.amount }
     val monthPrivateIncome = if (isPrivateUnlocked) {
-        privateList.filter { it.date.startsWith(currentMonth) && it.isIncome }.sumOf { it.amount }
+        privateList.filter { it.date.startsWith(currentMonth) && it.isActualIncome }.sumOf { it.amount }
     } else 0.0
 
     val monthTotalSpent = monthPublicSpent + monthPrivateSpent
@@ -162,18 +162,6 @@ fun BudgetScreen(
                 )
             }
 
-            // Secondary Budget Card (only displayed when vault is active)
-            if (isPrivateUnlocked) {
-                item {
-                    BudgetStatusCard(
-                        title = "Vault Budget",
-                        budgetAmount = privateBudget,
-                        spentAmount = monthPrivateSpent,
-                        currencySymbol = currency.symbol,
-                        accentColor = AccentGold
-                    )
-                }
-            }
 
             // Savings Tracker
             item {
@@ -191,8 +179,8 @@ fun BudgetScreen(
         EditBudgetDialog(
             currentBudget = currentBudget,
             onDismiss = { showEditBudgetDialog = false },
-            onSave = { monthly, pub, priv ->
-                viewModel.saveBudget(monthly, pub, priv)
+            onSave = { monthly, pub ->
+                viewModel.saveBudget(monthly, pub, 0.0)
                 showEditBudgetDialog = false
             }
         )
@@ -446,17 +434,16 @@ fun SavingsTrackerCard(
 fun EditBudgetDialog(
     currentBudget: Budget?,
     onDismiss: () -> Unit,
-    onSave: (monthlyBudget: Double, publicBudget: Double, privateBudget: Double) -> Unit
+    onSave: (monthlyBudget: Double, publicBudget: Double) -> Unit
 ) {
     var monthlyText by remember { mutableStateOf(if (currentBudget != null && currentBudget.monthlyBudget > 0) currentBudget.monthlyBudget.toString() else "") }
     var publicText by remember { mutableStateOf(if (currentBudget != null && currentBudget.publicBudget > 0) currentBudget.publicBudget.toString() else "") }
-    var privateText by remember { mutableStateOf(if (currentBudget != null && currentBudget.privateBudget > 0) currentBudget.privateBudget.toString() else "") }
 
     AlertDialog(
         onDismissRequest = onDismiss,
         modifier = ResponsiveModal.modalModifier(),
         properties = ResponsiveModal.dialogProperties,
-        title = { Text("Set Monthly Budgets", fontWeight = FontWeight.Bold) },
+        title = { Text("Set Monthly Budget", fontWeight = FontWeight.Bold) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 OutlinedTextField(
@@ -476,15 +463,6 @@ fun EditBudgetDialog(
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     modifier = Modifier.fillMaxWidth().testTag("public_budget_input")
                 )
-
-                OutlinedTextField(
-                    value = privateText,
-                    onValueChange = { privateText = it },
-                    label = { Text("Private Personal Budget") },
-                    placeholder = { Text("e.g. 15000") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    modifier = Modifier.fillMaxWidth().testTag("private_budget_input")
-                )
             }
         },
         confirmButton = {
@@ -492,8 +470,7 @@ fun EditBudgetDialog(
                 onClick = {
                     val m = monthlyText.toDoubleOrNull() ?: 0.0
                     val pub = publicText.toDoubleOrNull() ?: 0.0
-                    val priv = privateText.toDoubleOrNull() ?: 0.0
-                    onSave(m, pub, priv)
+                    onSave(m, pub)
                 },
                 modifier = Modifier.testTag("save_budget_button")
             ) {

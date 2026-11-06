@@ -90,9 +90,7 @@ import java.util.Locale
 
 enum class SimpleReportPeriod(val label: String) {
     THIS_MONTH("This Month"),
-    LAST_30_DAYS("Last 30 Days"),
-    THIS_YEAR("This Year"),
-    ALL_TIME("All Time")
+    CUSTOM_DATE_RANGE("Custom Date Range")
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -114,6 +112,12 @@ fun ReportsScreen(
     var selectedStatementBank by remember { mutableStateOf("All") }
     var selectedPeriod by remember { mutableStateOf(SimpleReportPeriod.THIS_MONTH) }
 
+    val todayStr = remember { SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date()) }
+    val thisMonthStr = remember { SimpleDateFormat("yyyy-MM", Locale.US).format(Date()) }
+
+    var customStartDate by remember { mutableStateOf(todayStr) }
+    var customEndDate by remember { mutableStateOf(todayStr) }
+
     val rawList = if (isVaultActive) {
         privateList
     } else {
@@ -123,34 +127,27 @@ fun ReportsScreen(
         }
     }
 
-    val todayStr = remember { SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date()) }
-    val thisMonthStr = remember { SimpleDateFormat("yyyy-MM", Locale.US).format(Date()) }
-    val thisYearStr = remember { SimpleDateFormat("yyyy", Locale.US).format(Date()) }
-
-    val thirtyDaysAgoStr = remember {
-        val cal = Calendar.getInstance()
-        cal.add(Calendar.DAY_OF_YEAR, -30)
-        SimpleDateFormat("yyyy-MM-dd", Locale.US).format(cal.time)
-    }
-
-    // Statement Transactions logic pulled up
+    // Statement Transactions logic pulled up (Includes transfers for official ledger)
     val statementTransactions = rawList.filter {
         if (selectedStatementBank == "All") true
         else it.paymentMethod.contains(selectedStatementBank, ignoreCase = true)
     }.sortedByDescending { it.date }
 
-    // Filter by period
+    // Filter by period for Spending Reports (Exclude transfers)
     val periodTransactions = rawList.filter { exp ->
+        if (exp.isTransfer) return@filter false
         when (selectedPeriod) {
             SimpleReportPeriod.THIS_MONTH -> exp.date.startsWith(thisMonthStr)
-            SimpleReportPeriod.LAST_30_DAYS -> exp.date in thirtyDaysAgoStr..todayStr
-            SimpleReportPeriod.THIS_YEAR -> exp.date.startsWith(thisYearStr)
-            SimpleReportPeriod.ALL_TIME -> true
+            SimpleReportPeriod.CUSTOM_DATE_RANGE -> {
+                val sOk = customStartDate.isBlank() || exp.date >= customStartDate
+                val eOk = customEndDate.isBlank() || exp.date <= customEndDate
+                sOk && eOk
+            }
         }
     }
 
-    val periodExpensesList = periodTransactions.filter { !it.isIncome }
-    val periodIncomeList = periodTransactions.filter { it.isIncome }
+    val periodExpensesList = periodTransactions.filter { it.isActualExpense }
+    val periodIncomeList = periodTransactions.filter { it.isActualIncome }
 
     val totalSpent = periodExpensesList.sumOf { it.amount }
     val totalIncome = periodIncomeList.sumOf { it.amount }
@@ -203,7 +200,7 @@ fun ReportsScreen(
                                     userName = user?.displayName ?: "User",
                                     userEmail = user?.email ?: "",
                                     currencySymbol = currencySymbol,
-                                    isAggregate = selectedPeriod == SimpleReportPeriod.THIS_YEAR || selectedPeriod == SimpleReportPeriod.ALL_TIME
+                                    isAggregate = false
                                 )
                             }
                         },
@@ -289,7 +286,7 @@ fun ReportsScreen(
                 }
 
                 val totalCredits = statementTransactions.filter { it.isIncome }.sumOf { it.amount }
-                val totalDebits = statementTransactions.filter { !it.isIncome }.sumOf { it.amount }
+                val totalDebits = statementTransactions.filter { it.isExpense }.sumOf { it.amount }
                 val matchingAccount = bankAccounts.find { it.name.equals(selectedStatementBank, ignoreCase = true) }
                 val currentAccBalance = matchingAccount?.balance ?: bankAccounts.sumOf { it.balance }
 
@@ -437,24 +434,50 @@ fun ReportsScreen(
             } else {
                 // 1. Period Selector Chips
                 item {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        SimpleReportPeriod.values().forEach { period ->
-                            val isSelected = period == selectedPeriod
-                            FilterChip(
-                                selected = isSelected,
-                                onClick = { selectedPeriod = period },
-                                label = { Text(period.label, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium) },
-                                colors = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor = AccentBlue,
-                                    selectedLabelColor = PureWhite
-                                ),
-                                shape = RoundedCornerShape(20.dp)
-                            )
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            SimpleReportPeriod.values().forEach { period ->
+                                val isSelected = period == selectedPeriod
+                                FilterChip(
+                                    selected = isSelected,
+                                    onClick = { selectedPeriod = period },
+                                    label = { Text(period.label, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium) },
+                                    colors = FilterChipDefaults.filterChipColors(
+                                        selectedContainerColor = AccentBlue,
+                                        selectedLabelColor = PureWhite
+                                    ),
+                                    shape = RoundedCornerShape(20.dp)
+                                )
+                            }
+                        }
+
+                        if (selectedPeriod == SimpleReportPeriod.CUSTOM_DATE_RANGE) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                androidx.compose.material3.OutlinedTextField(
+                                    value = customStartDate,
+                                    onValueChange = { customStartDate = it },
+                                    label = { Text("Start Date (YYYY-MM-DD)", fontSize = 11.sp) },
+                                    modifier = Modifier.weight(1f),
+                                    shape = RoundedCornerShape(10.dp),
+                                    singleLine = true
+                                )
+                                androidx.compose.material3.OutlinedTextField(
+                                    value = customEndDate,
+                                    onValueChange = { customEndDate = it },
+                                    label = { Text("End Date (YYYY-MM-DD)", fontSize = 11.sp) },
+                                    modifier = Modifier.weight(1f),
+                                    shape = RoundedCornerShape(10.dp),
+                                    singleLine = true
+                                )
+                            }
                         }
                     }
                 }
@@ -464,11 +487,11 @@ fun ReportsScreen(
             item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(22.dp),
+                    shape = RoundedCornerShape(14.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                     elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                 ) {
-                    Column(modifier = Modifier.padding(20.dp)) {
+                    Column(modifier = Modifier.padding(14.dp)) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
@@ -480,15 +503,20 @@ fun ReportsScreen(
                             )
                             IconButton(
                                 onClick = {
+                                    val periodLabelStr = if (selectedPeriod == SimpleReportPeriod.CUSTOM_DATE_RANGE) {
+                                        "$customStartDate to $customEndDate"
+                                    } else {
+                                        selectedPeriod.label
+                                    }
                                     FinancialInvoiceHelper.printInvoice(
                                         context = context,
                                         transactions = periodTransactions,
-                                        title = "${selectedPeriod.label} Financial Statement Invoice",
-                                        periodLabel = selectedPeriod.label,
+                                        title = "$periodLabelStr Financial Statement Invoice",
+                                        periodLabel = periodLabelStr,
                                         userName = user?.displayName ?: "User",
                                         userEmail = user?.email ?: "",
                                         currencySymbol = currencySymbol,
-                                        isAggregate = selectedPeriod == SimpleReportPeriod.THIS_YEAR || selectedPeriod == SimpleReportPeriod.ALL_TIME
+                                        isAggregate = false
                                     )
                                 },
                                 modifier = Modifier.testTag("print_summary_icon_button")
@@ -697,10 +725,11 @@ fun ReportsScreen(
             item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(22.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                    shape = RoundedCornerShape(14.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                 ) {
-                    Column(modifier = Modifier.padding(20.dp)) {
+                    Column(modifier = Modifier.padding(14.dp)) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
@@ -807,10 +836,11 @@ fun ReportsScreen(
             item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(22.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                    shape = RoundedCornerShape(14.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                 ) {
-                    Column(modifier = Modifier.padding(20.dp)) {
+                    Column(modifier = Modifier.padding(14.dp)) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,

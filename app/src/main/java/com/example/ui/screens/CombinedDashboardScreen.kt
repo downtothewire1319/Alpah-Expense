@@ -175,8 +175,8 @@ fun CombinedHeroCard(
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(24.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
+        shape = RoundedCornerShape(14.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Box(
             modifier = Modifier
@@ -189,7 +189,7 @@ fun CombinedHeroCard(
                         )
                     )
                 )
-                .padding(20.dp)
+                .padding(14.dp)
         ) {
             Column {
                 Text(
@@ -302,10 +302,11 @@ fun MonthlyComparisonCard(
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
-        Column(modifier = Modifier.padding(20.dp)) {
+        Column(modifier = Modifier.padding(14.dp)) {
             Text(
                 text = "Current Month Breakdown",
                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)

@@ -100,14 +100,14 @@ fun PublicExpensesScreen(
     var invoiceExpense by remember { mutableStateOf<Expense?>(null) }
     var expenseToDelete by remember { mutableStateOf<Expense?>(null) }
 
-    val rawList = if (isVaultActive) {
+    val rawList = (if (isVaultActive) {
         privateList
     } else {
         when (val s = publicState) {
             is UiState.Success -> s.data
             else -> emptyList()
         }
-    }
+    }).filter { !it.isTransfer }
 
     // Extract dynamic categories present in data + custom
     val allFilterCategories = remember(rawList, customCategories) {
@@ -125,8 +125,8 @@ fun PublicExpensesScreen(
         matchesCategory && matchesQuery
     }.sortedByDescending { it.date }
 
-    val totalExpensesSum = filteredList.filter { !it.isIncome }.sumOf { it.amount }
-    val totalIncomeSum = filteredList.filter { it.isIncome }.sumOf { it.amount }
+    val totalExpensesSum = filteredList.filter { it.isActualExpense }.sumOf { it.amount }
+    val totalIncomeSum = filteredList.filter { it.isActualIncome }.sumOf { it.amount }
 
     Scaffold(
         topBar = {

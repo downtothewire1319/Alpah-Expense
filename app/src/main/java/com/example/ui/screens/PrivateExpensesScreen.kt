@@ -84,6 +84,7 @@ fun PrivateExpensesScreen(
     val isPinConfigured by viewModel.isPinConfigured.collectAsState()
     val privateList by viewModel.privateExpenses.collectAsState()
     val isLoading by viewModel.privateExpensesLoading.collectAsState()
+    val bankAccounts by viewModel.bankAccounts.collectAsState()
     val currency by viewModel.selectedCurrency.collectAsState()
 
     var pinError by remember { mutableStateOf<String?>(null) }
@@ -143,8 +144,9 @@ fun PrivateExpensesScreen(
         return
     }
 
-    // Unlocked State - Full Private Management
+    // Unlocked State - Full Private Management (Exclude transfers)
     val filteredList = privateList.filter { expense ->
+        if (expense.isTransfer) return@filter false
         val matchesCategory = selectedCategory == "All" || expense.category.equals(selectedCategory, ignoreCase = true)
         val matchesQuery = searchQuery.isBlank() ||
                 expense.title.contains(searchQuery, ignoreCase = true) ||
@@ -153,7 +155,7 @@ fun PrivateExpensesScreen(
         matchesCategory && matchesQuery
     }
 
-    val totalPrivateAmount = filteredList.sumOf { it.amount }
+    val totalPrivateAmount = filteredList.filter { it.isActualExpense }.sumOf { it.amount }
 
     Scaffold(
         topBar = {
@@ -354,6 +356,7 @@ fun PrivateExpensesScreen(
     if (showAddDialog) {
         ExpenseDialog(
             isPrivate = true,
+            bankAccounts = bankAccounts,
             onDismiss = { showAddDialog = false },
             onSave = { title, amount, category, date, paymentMethod, notes, transactionType ->
                 viewModel.addPrivateExpense(
@@ -374,6 +377,7 @@ fun PrivateExpensesScreen(
         ExpenseDialog(
             initialExpense = editingExpense,
             isPrivate = true,
+            bankAccounts = bankAccounts,
             onDismiss = { editingExpense = null },
             onSave = { title, amount, category, date, paymentMethod, notes, transactionType ->
                 viewModel.updatePrivateExpense(

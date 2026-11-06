@@ -86,10 +86,10 @@ object FinancialInvoiceHelper {
         isAggregate: Boolean = false
     ): String {
         val displayTransactions = if (isAggregate) aggregateTransactionsByMonth(transactions) else transactions
-        val expenses = displayTransactions.filter { !it.isIncome }
-        val incomes = displayTransactions.filter { it.isIncome }
-        val totalSpent = expenses.sumOf { it.amount }
-        val totalIncome = incomes.sumOf { it.amount }
+        val actualExpenses = displayTransactions.filter { it.isActualExpense }
+        val actualIncomes = displayTransactions.filter { it.isActualIncome }
+        val totalSpent = actualExpenses.sumOf { it.amount }
+        val totalIncome = actualIncomes.sumOf { it.amount }
         val netBalance = totalIncome - totalSpent
         val dateGen = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US).format(Date())
 
@@ -134,14 +134,14 @@ object FinancialInvoiceHelper {
         isAggregate: Boolean = false
     ): String {
         val displayTransactions = if (isAggregate) aggregateTransactionsByMonth(transactions) else transactions
-        val expenses = displayTransactions.filter { !it.isIncome }
-        val incomes = displayTransactions.filter { it.isIncome }
-        val totalSpent = expenses.sumOf { it.amount }
-        val totalIncome = incomes.sumOf { it.amount }
+        val actualExpenses = displayTransactions.filter { it.isActualExpense }
+        val actualIncomes = displayTransactions.filter { it.isActualIncome }
+        val totalSpent = actualExpenses.sumOf { it.amount }
+        val totalIncome = actualIncomes.sumOf { it.amount }
         val netBalance = totalIncome - totalSpent
         val dateGen = SimpleDateFormat("MMMM dd, yyyy", Locale.US).format(Date())
 
-        val categoryRows = expenses.groupBy { it.category }
+        val categoryRows = actualExpenses.groupBy { it.category }
             .mapValues { it.value.sumOf { e -> e.amount } }
             .entries.sortedByDescending { it.value }
             .take(6)
@@ -349,8 +349,8 @@ object FinancialInvoiceHelper {
     }
 
     private fun aggregateTransactionsByMonth(transactions: List<Expense>): List<Expense> {
-        return transactions.groupBy { it.date.take(7) }.map { (month, list) ->
-            val total = list.sumOf { if (it.isIncome) it.amount else -it.amount }
+        return transactions.filter { !it.isTransfer }.groupBy { it.date.take(7) }.map { (month, list) ->
+            val total = list.sumOf { if (it.isActualIncome) it.amount else -it.amount }
             Expense(
                 title = "Total for $month",
                 amount = Math.abs(total),

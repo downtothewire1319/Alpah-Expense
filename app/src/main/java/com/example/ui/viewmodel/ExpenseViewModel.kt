@@ -6,10 +6,15 @@ import com.example.data.model.BankAccount
 import com.example.data.model.Budget
 import com.example.data.model.Expense
 import com.example.data.model.ExpenseCategories
+import com.example.data.model.FamilyFundTransfer
+import com.example.data.model.FamilyMember
+import com.example.data.model.MonthlySavingsBreakdown
 import com.example.data.model.UserProfile
 import com.example.data.model.UserSecurity
+import com.example.data.repository.BackupMetadata
 import com.example.data.repository.ExpenseRepository
 import com.example.data.security.PinSecurityManager
+import com.example.data.util.FinancialCalculator
 import com.example.ui.util.CurrencyHelper
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -28,6 +33,16 @@ sealed interface UiState<out T> {
     data object Loading : UiState<Nothing>
     data class Success<T>(val data: T) : UiState<T>
     data class Error(val message: String) : UiState<Nothing>
+}
+
+sealed interface BackupUiState {
+    data object Loading : BackupUiState
+    data class Success(val metadata: BackupMetadata, val message: String = "Backup successful") : BackupUiState
+    data class Error(val message: String) : BackupUiState
+}
+
+enum class SyncStatus {
+    SYNCED, SYNCING, OFFLINE
 }
 
 data class FinancialSummary(
@@ -51,7 +66,9 @@ data class FinancialSummary(
     val combinedCategoryTotals: Map<String, Double> = emptyMap(),
     val publicMonthlyTrend: Map<String, Double> = emptyMap(),
     val privateMonthlyTrend: Map<String, Double> = emptyMap(),
-    val combinedMonthlyTrend: Map<String, Double> = emptyMap()
+    val combinedMonthlyTrend: Map<String, Double> = emptyMap(),
+    val combinedMonthlySavingsTrend: Map<String, Double> = emptyMap(),
+    val monthlySavingsBreakdowns: Map<String, MonthlySavingsBreakdown> = emptyMap()
 ) {
     val totalPublic: Double get() = totalPublicCost
     val totalPrivate: Double get() = totalPrivateCost
@@ -135,6 +152,21 @@ class ExpenseViewModel(
             initialValue = ExpenseCategories.defaultBankAccounts
         )
 
+    // Family Fund Management (Elder Brother, Father, Wife, etc.)
+    val familyMembers: StateFlow<List<FamilyMember>> = repository.observeFamilyMembers()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000L),
+            initialValue = ExpenseCategories.defaultFamilyMembers
+        )
+
+    val familyTransfers: StateFlow<List<FamilyFundTransfer>> = repository.observeFamilyTransfers()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000L),
+            initialValue = emptyList()
+        )
+
     // Status messages for Snackbars/Alerts
     private val _statusMessage = MutableStateFlow<String?>(null)
     val statusMessage: StateFlow<String?> = _statusMessage.asStateFlow()
@@ -146,6 +178,9 @@ class ExpenseViewModel(
             started = SharingStarted.WhileSubscribed(5000L),
             initialValue = null
         )
+
+    private val _syncStatus = MutableStateFlow(SyncStatus.SYNCED)
+    val syncStatus: StateFlow<SyncStatus> = _syncStatus.asStateFlow()
 
     fun updateUserProfile(name: String, photoUri: String?, onComplete: (Boolean) -> Unit = {}) {
         viewModelScope.launch {
@@ -339,6 +374,7 @@ class ExpenseViewModel(
             if (result.isSuccess) {
                 val delta = if (expense.isIncome) expense.amount else -expense.amount
                 repository.adjustBankBalanceByName(expense.paymentMethod, delta)
+                autoBackup()
                 _statusMessage.value = if (expense.isIncome) "Income recorded" else "Expense added"
                 onDone(true)
             } else {
@@ -380,6 +416,7 @@ class ExpenseViewModel(
                 }
                 val newDelta = if (expense.isIncome) expense.amount else -expense.amount
                 repository.adjustBankBalanceByName(expense.paymentMethod, newDelta)
+                autoBackup()
                 _statusMessage.value = "Updated successfully"
                 onDone(true)
             } else {
@@ -398,6 +435,7 @@ class ExpenseViewModel(
                     val reverseDelta = if (exp.isIncome) -exp.amount else exp.amount
                     repository.adjustBankBalanceByName(exp.paymentMethod, reverseDelta)
                 }
+                autoBackup()
                 _statusMessage.value = "Entry deleted"
                 onDone(true)
             } else {
@@ -438,6 +476,7 @@ class ExpenseViewModel(
             if (result.isSuccess) {
                 val delta = if (expense.isIncome) expense.amount else -expense.amount
                 repository.adjustBankBalanceByName(expense.paymentMethod, delta)
+                autoBackup()
                 _statusMessage.value = if (expense.isIncome) "Private income saved" else "Private expense saved"
                 onDone(true)
             } else {
@@ -485,6 +524,7 @@ class ExpenseViewModel(
                 }
                 val newDelta = if (expense.isIncome) expense.amount else -expense.amount
                 repository.adjustBankBalanceByName(expense.paymentMethod, newDelta)
+                autoBackup()
                 _statusMessage.value = "Private entry updated"
                 onDone(true)
             } else {
@@ -509,6 +549,7 @@ class ExpenseViewModel(
                     val reverseDelta = if (exp.isIncome) -exp.amount else exp.amount
                     repository.adjustBankBalanceByName(exp.paymentMethod, reverseDelta)
                 }
+                autoBackup()
                 _statusMessage.value = "Private entry deleted"
                 onDone(true)
             } else {
@@ -524,6 +565,7 @@ class ExpenseViewModel(
         viewModelScope.launch {
             val res = repository.saveBankAccount(account)
             if (res.isSuccess) {
+                autoBackup()
                 _statusMessage.value = "Bank account updated"
                 onDone(true)
             } else {
@@ -537,6 +579,7 @@ class ExpenseViewModel(
         viewModelScope.launch {
             val res = repository.deleteBankAccount(accountId)
             if (res.isSuccess) {
+                autoBackup()
                 _statusMessage.value = "Bank account deleted"
                 onDone(true)
             } else {
@@ -550,6 +593,7 @@ class ExpenseViewModel(
         viewModelScope.launch {
             val res = repository.updateBankBalance(accountId, newBalance)
             if (res.isSuccess) {
+                autoBackup()
                 _statusMessage.value = "Balance updated"
                 onDone(true)
             } else {
@@ -601,7 +645,7 @@ class ExpenseViewModel(
                             date = today,
                             paymentMethod = fromBank,
                             notes = "Transferred $amount from $fromBank to $toBank",
-                            transactionType = "expense",
+                            transactionType = "transfer",
                             expenseType = "private"
                         )
                     )
@@ -613,7 +657,7 @@ class ExpenseViewModel(
                             date = today,
                             paymentMethod = toBank,
                             notes = "Received transfer of $amount from $fromBank",
-                            transactionType = "income",
+                            transactionType = "transfer",
                             expenseType = "private"
                         )
                     )
@@ -626,7 +670,7 @@ class ExpenseViewModel(
                             date = today,
                             paymentMethod = fromBank,
                             notes = "Transferred $amount from $fromBank to $toBank",
-                            transactionType = "expense",
+                            transactionType = "transfer",
                             expenseType = "public"
                         )
                     )
@@ -638,11 +682,12 @@ class ExpenseViewModel(
                             date = today,
                             paymentMethod = toBank,
                             notes = "Received transfer of $amount from $fromBank",
-                            transactionType = "income",
+                            transactionType = "transfer",
                             expenseType = "public"
                         )
                     )
                 }
+                autoBackup()
                 _statusMessage.value = "Transferred ${CurrencyHelper.format(amount, selectedCurrency.value.symbol)} successfully"
                 onDone(true)
             } else {
@@ -653,9 +698,190 @@ class ExpenseViewModel(
     }
 
 
+    // --- Family Fund Operations ---
+
+    fun recordFamilyTransfer(
+        memberId: String,
+        memberName: String,
+        amount: Double,
+        date: String,
+        paymentSource: String,
+        transactionId: String,
+        notes: String,
+        onDone: (Boolean) -> Unit = {}
+    ) {
+        if (amount <= 0.0) {
+            _statusMessage.value = "Amount must be greater than zero"
+            onDone(false)
+            return
+        }
+
+        viewModelScope.launch {
+            val transfer = FamilyFundTransfer(
+                memberId = memberId,
+                memberName = memberName,
+                amount = amount,
+                date = date.ifBlank { SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date()) },
+                paymentSource = paymentSource,
+                transactionId = transactionId.trim(),
+                notes = notes.trim(),
+                status = "Completed"
+            )
+
+            val result = repository.addFamilyTransfer(transfer)
+            if (result.isSuccess) {
+                autoBackup()
+                _statusMessage.value = "Recorded transfer of ${CurrencyHelper.format(amount, selectedCurrency.value.symbol)} to $memberName"
+                onDone(true)
+            } else {
+                _statusMessage.value = result.exceptionOrNull()?.localizedMessage ?: "Failed to record family transfer"
+                onDone(false)
+            }
+        }
+    }
+
+    fun updateFamilyTransfer(
+        oldTransfer: FamilyFundTransfer,
+        newTransfer: FamilyFundTransfer,
+        onDone: (Boolean) -> Unit = {}
+    ) {
+        viewModelScope.launch {
+            val result = repository.updateFamilyTransfer(oldTransfer, newTransfer)
+            if (result.isSuccess) {
+                autoBackup()
+                _statusMessage.value = "Transfer updated successfully"
+                onDone(true)
+            } else {
+                _statusMessage.value = result.exceptionOrNull()?.localizedMessage ?: "Failed to update transfer"
+                onDone(false)
+            }
+        }
+    }
+
+    fun deleteFamilyTransfer(transfer: FamilyFundTransfer, onDone: (Boolean) -> Unit = {}) {
+        viewModelScope.launch {
+            val result = repository.deleteFamilyTransfer(transfer)
+            if (result.isSuccess) {
+                autoBackup()
+                _statusMessage.value = "Transfer deleted & account balance refunded"
+                onDone(true)
+            } else {
+                _statusMessage.value = result.exceptionOrNull()?.localizedMessage ?: "Failed to delete transfer"
+                onDone(false)
+            }
+        }
+    }
+
+    fun saveFamilyMember(
+        name: String,
+        relationship: String,
+        avatarColorHex: Long = 0xFF1E88E5,
+        phone: String = "",
+        notes: String = "",
+        id: String = "",
+        onDone: (Boolean) -> Unit = {}
+    ) {
+        val trimmedName = name.trim()
+        if (trimmedName.isBlank()) {
+            _statusMessage.value = "Member name cannot be blank"
+            onDone(false)
+            return
+        }
+
+        viewModelScope.launch {
+            val member = FamilyMember(
+                id = id,
+                name = trimmedName,
+                relationship = relationship.ifBlank { "Family Member" },
+                avatarColorHex = avatarColorHex,
+                phone = phone.trim(),
+                notes = notes.trim()
+            )
+            val result = repository.saveFamilyMember(member)
+            if (result.isSuccess) {
+                autoBackup()
+                _statusMessage.value = "Family member '$trimmedName' saved"
+                onDone(true)
+            } else {
+                _statusMessage.value = result.exceptionOrNull()?.localizedMessage ?: "Failed to save member"
+                onDone(false)
+            }
+        }
+    }
+
+    fun deleteFamilyMember(memberId: String, onDone: (Boolean) -> Unit = {}) {
+        viewModelScope.launch {
+            val result = repository.deleteFamilyMember(memberId)
+            if (result.isSuccess) {
+                autoBackup()
+                _statusMessage.value = "Family member removed"
+                onDone(true)
+            } else {
+                _statusMessage.value = result.exceptionOrNull()?.localizedMessage ?: "Failed to delete member"
+                onDone(false)
+            }
+        }
+    }
+
+    fun filterFamilyTransfers(
+        transfers: List<FamilyFundTransfer>,
+        memberId: String? = null,
+        paymentSource: String? = null,
+        period: String = "All Time",
+        customStartDate: String? = null,
+        customEndDate: String? = null
+    ): List<FamilyFundTransfer> {
+        val now = java.util.Calendar.getInstance()
+        val todayStr = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(now.time)
+        val thisMonthPrefix = SimpleDateFormat("yyyy-MM", Locale.US).format(now.time)
+        val thisYearPrefix = SimpleDateFormat("yyyy", Locale.US).format(now.time)
+
+        val calLastMonth = java.util.Calendar.getInstance().apply { add(java.util.Calendar.MONTH, -1) }
+        val lastMonthPrefix = SimpleDateFormat("yyyy-MM", Locale.US).format(calLastMonth.time)
+
+        val cal3MonthsAgo = java.util.Calendar.getInstance().apply { add(java.util.Calendar.MONTH, -3) }
+        val threeMonthsAgoStr = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(cal3MonthsAgo.time)
+
+        val cal4MonthsAgo = java.util.Calendar.getInstance().apply { add(java.util.Calendar.MONTH, -4) }
+        val fourMonthsAgoStr = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(cal4MonthsAgo.time)
+
+        val calWeekAgo = java.util.Calendar.getInstance().apply { add(java.util.Calendar.DAY_OF_YEAR, -7) }
+        val weekAgoStr = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(calWeekAgo.time)
+
+        return transfers.filter { item ->
+            // 1. Member filter
+            val memberMatches = memberId.isNullOrBlank() || memberId == "All" ||
+                    item.memberId == memberId || item.memberName.equals(memberId, ignoreCase = true)
+            if (!memberMatches) return@filter false
+
+            // 2. Payment source filter
+            val sourceMatches = paymentSource.isNullOrBlank() || paymentSource == "All" ||
+                    item.paymentSource.equals(paymentSource, ignoreCase = true)
+            if (!sourceMatches) return@filter false
+
+            // 3. Period filter
+            val periodMatches = when (period) {
+                "Today" -> item.date == todayStr
+                "This Week" -> item.date in weekAgoStr..todayStr
+                "This Month" -> item.date.startsWith(thisMonthPrefix)
+                "Last Month" -> item.date.startsWith(lastMonthPrefix)
+                "Last 3 Months" -> item.date >= threeMonthsAgoStr && item.date <= todayStr
+                "Last 4 Months" -> item.date >= fourMonthsAgoStr && item.date <= todayStr
+                "This Year" -> item.date.startsWith(thisYearPrefix)
+                "Custom Date Range" -> {
+                    val startOk = customStartDate.isNullOrBlank() || item.date >= customStartDate
+                    val endOk = customEndDate.isNullOrBlank() || item.date <= customEndDate
+                    startOk && endOk
+                }
+                else -> true
+            }
+            periodMatches
+        }
+    }
+
     // --- Budget Operations ---
 
-    fun saveBudget(monthlyBudget: Double, publicBudget: Double, privateBudget: Double, onDone: (Boolean) -> Unit = {}) {
+    fun saveBudget(monthlyBudget: Double, publicBudget: Double, privateBudget: Double = 0.0, onDone: (Boolean) -> Unit = {}) {
         viewModelScope.launch {
             val budget = Budget(
                 month = currentMonthKey,
@@ -665,6 +891,7 @@ class ExpenseViewModel(
             )
             val result = repository.saveBudget(budget)
             if (result.isSuccess) {
+                autoBackup()
                 _statusMessage.value = "Budget updated for $currentMonthKey"
                 onDone(true)
             } else {
@@ -679,15 +906,52 @@ class ExpenseViewModel(
     private fun buildMonthlyTrend(costList: List<Expense>): Map<String, Double> {
         val result = linkedMapOf<String, Double>()
         val sdf = SimpleDateFormat("yyyy-MM", Locale.US)
-        for (i in 5 downTo 0) {
+        // Rolling window: 6 months past to 3 months future (e.g. Nov 26, Dec 26, Jan 27, Feb 27)
+        for (offset in -6..3) {
             val cal = java.util.Calendar.getInstance()
-            cal.add(java.util.Calendar.MONTH, -i)
+            cal.add(java.util.Calendar.MONTH, offset)
             result[sdf.format(cal.time)] = 0.0
+        }
+        for (item in costList) {
+            val m = item.date.take(7)
+            if (m.length == 7 && !result.containsKey(m)) {
+                result[m] = 0.0
+            }
         }
         for (item in costList) {
             val m = item.date.take(7)
             if (m.length == 7) {
                 result[m] = (result[m] ?: 0.0) + item.amount
+            }
+        }
+        return result.toSortedMap()
+    }
+
+    private fun buildSavingsTrend(incomeList: List<Expense>, expenseList: List<Expense>): Map<String, Double> {
+        val result = linkedMapOf<String, Double>()
+        val sdf = SimpleDateFormat("yyyy-MM", Locale.US)
+        for (i in 5 downTo 0) {
+            val cal = java.util.Calendar.getInstance()
+            cal.add(java.util.Calendar.MONTH, -i)
+            result[sdf.format(cal.time)] = 0.0
+        }
+        result[currentMonthKey] = result[currentMonthKey] ?: 0.0
+        for (item in (incomeList + expenseList)) {
+            val m = item.date.take(7)
+            if (m.length == 7 && !result.containsKey(m)) {
+                result[m] = 0.0
+            }
+        }
+        for (item in incomeList) {
+            val m = item.date.take(7)
+            if (m.length == 7) {
+                result[m] = (result[m] ?: 0.0) + item.amount
+            }
+        }
+        for (item in expenseList) {
+            val m = item.date.take(7)
+            if (m.length == 7) {
+                result[m] = (result[m] ?: 0.0) - item.amount
             }
         }
         return result.toSortedMap()
@@ -714,21 +978,33 @@ class ExpenseViewModel(
     ): FinancialSummary {
         val currentMonth = currentMonthKey
 
-        val publicIncomeList = publicList.filter { it.isIncome }
-        val publicCostList = publicList.filter { !it.isIncome }
+        // Filter out transfers for income/expense calculations
+        val actualPublicIncomeList = publicList.filter { it.isActualIncome }
+        val actualPublicCostList = publicList.filter { it.isActualExpense }
 
-        val publicTotalIncome = publicIncomeList.sumOf { it.amount }
-        val publicTotalCost = publicCostList.sumOf { it.amount }
+        val actualPrivateIncomeList = if (isUnlocked) privateList.filter { it.isActualIncome } else emptyList()
+        val actualPrivateCostList = if (isUnlocked) privateList.filter { it.isActualExpense } else emptyList()
+
+        val publicTotalIncome = actualPublicIncomeList.sumOf { it.amount }
+        val publicTotalCost = actualPublicCostList.sumOf { it.amount }
         val publicNetBalance = publicTotalIncome - publicTotalCost
 
-        val currentMonthPubIncome = publicIncomeList.filter { it.date.startsWith(currentMonth) }.sumOf { it.amount }
-        val currentMonthPubCost = publicCostList.filter { it.date.startsWith(currentMonth) }.sumOf { it.amount }
+        val currentMonthPubIncome = actualPublicIncomeList.filter { it.date.startsWith(currentMonth) }.sumOf { it.amount }
+        val currentMonthPubCost = actualPublicCostList.filter { it.date.startsWith(currentMonth) }.sumOf { it.amount }
         val currentMonthPubBalance = currentMonthPubIncome - currentMonthPubCost
 
-        val publicCatTotals = publicCostList.groupBy { it.category }
+        val publicCatTotals = actualPublicCostList.groupBy { it.category }
             .mapValues { entry -> entry.value.sumOf { it.amount } }
 
-        val publicTrend = buildMonthlyTrend(publicCostList)
+        val publicTrend = buildMonthlyTrend(actualPublicCostList)
+
+        val savingsBreakdowns = buildSavingsBreakdowns(
+            actualPublicIncomeList,
+            actualPrivateIncomeList,
+            actualPublicCostList,
+            actualPrivateCostList
+        )
+        val combinedSavingsTrend = savingsBreakdowns.mapValues { it.value.savings }
 
         if (!isUnlocked) {
             return FinancialSummary(
@@ -748,25 +1024,27 @@ class ExpenseViewModel(
                 combinedIncome = publicTotalIncome,
                 combinedCurrentMonthCost = currentMonthPubCost,
                 publicCategoryTotals = publicCatTotals,
-                publicMonthlyTrend = publicTrend
+                publicMonthlyTrend = publicTrend,
+                combinedMonthlySavingsTrend = combinedSavingsTrend,
+                monthlySavingsBreakdowns = savingsBreakdowns
             )
         }
 
-        val privateIncomeList = privateList.filter { it.isIncome }
-        val privateCostList = privateList.filter { !it.isIncome }
-
-        val privateTotalIncome = privateIncomeList.sumOf { it.amount }
-        val privateTotalCost = privateCostList.sumOf { it.amount }
+        val privateTotalIncome = actualPrivateIncomeList.sumOf { it.amount }
+        val privateTotalCost = actualPrivateCostList.sumOf { it.amount }
         val privateNetBalance = privateTotalIncome - privateTotalCost
 
-        val currentMonthPrivIncome = privateIncomeList.filter { it.date.startsWith(currentMonth) }.sumOf { it.amount }
-        val currentMonthPrivCost = privateCostList.filter { it.date.startsWith(currentMonth) }.sumOf { it.amount }
+        val currentMonthPrivIncome = actualPrivateIncomeList.filter { it.date.startsWith(currentMonth) }.sumOf { it.amount }
+        val currentMonthPrivCost = actualPrivateCostList.filter { it.date.startsWith(currentMonth) }.sumOf { it.amount }
         val currentMonthPrivBalance = currentMonthPrivIncome - currentMonthPrivCost
 
-        val privateCatTotals = privateCostList.groupBy { it.category }
+        val privateCatTotals = actualPrivateCostList.groupBy { it.category }
             .mapValues { entry -> entry.value.sumOf { it.amount } }
 
-        val privateTrend = buildMonthlyTrend(privateCostList)
+        val privateTrend = buildMonthlyTrend(actualPrivateCostList)
+
+        val combinedIncomeList = actualPublicIncomeList + actualPrivateIncomeList
+        val combinedCostList = actualPublicCostList + actualPrivateCostList
 
         val combinedIncome = publicTotalIncome + privateTotalIncome
         val combinedCost = publicTotalCost + privateTotalCost
@@ -776,19 +1054,18 @@ class ExpenseViewModel(
         val combinedMonthCost = currentMonthPubCost + currentMonthPrivCost
         val combinedMonthBalance = combinedMonthIncome - combinedMonthCost
 
-        val allCostExpenses = publicCostList + privateCostList
-        val combinedCatTotals = allCostExpenses.groupBy { it.category }
+        val combinedCatTotals = combinedCostList.groupBy { it.category }
             .mapValues { entry -> entry.value.sumOf { it.amount } }
 
-        val combinedTrend = buildMonthlyTrend(allCostExpenses)
+        val combinedTrend = buildMonthlyTrend(combinedCostList)
 
         return FinancialSummary(
-            totalIncome = privateTotalIncome + publicTotalIncome,
-            totalCost = privateTotalCost + publicTotalCost,
-            netBalance = privateNetBalance + publicNetBalance,
-            currentMonthIncome = currentMonthPrivIncome + currentMonthPubIncome,
-            currentMonthCost = currentMonthPrivCost + currentMonthPubCost,
-            currentMonthBalance = currentMonthPrivBalance + currentMonthPubBalance,
+            totalIncome = combinedIncome,
+            totalCost = combinedCost,
+            netBalance = combinedNetBalance,
+            currentMonthIncome = combinedMonthIncome,
+            currentMonthCost = combinedMonthCost,
+            currentMonthBalance = combinedMonthBalance,
             totalPublicCost = publicTotalCost,
             totalPublicIncome = publicTotalIncome,
             currentMonthPublicCost = currentMonthPubCost,
@@ -803,8 +1080,42 @@ class ExpenseViewModel(
             combinedCategoryTotals = combinedCatTotals,
             publicMonthlyTrend = publicTrend,
             privateMonthlyTrend = privateTrend,
-            combinedMonthlyTrend = combinedTrend
+            combinedMonthlyTrend = combinedTrend,
+            combinedMonthlySavingsTrend = combinedSavingsTrend,
+            monthlySavingsBreakdowns = savingsBreakdowns
         )
+    }
+
+    private fun buildSavingsBreakdowns(
+        publicIncomeList: List<Expense>,
+        privateIncomeList: List<Expense>,
+        publicCostList: List<Expense>,
+        privateCostList: List<Expense>
+    ): Map<String, MonthlySavingsBreakdown> {
+        val currentYear = currentMonthKey.take(4).toIntOrNull() ?: 2026
+        val publicExpenses = publicIncomeList + publicCostList
+        val privateExpenses = privateIncomeList + privateCostList
+
+        val baseBreakdowns = FinancialCalculator.calculateMonthlyBreakdownsForYear(
+            year = currentYear,
+            publicExpenses = publicExpenses,
+            privateExpenses = privateExpenses
+        ).toMutableMap()
+
+        val allItems = publicExpenses + privateExpenses
+        for (item in allItems) {
+            val m = item.date.take(7)
+            if (m.length == 7 && !baseBreakdowns.containsKey(m)) {
+                val parts = m.split("-")
+                if (parts.size == 2) {
+                    val yr = parts[0].toIntOrNull() ?: currentYear
+                    val mo = parts[1].toIntOrNull() ?: 1
+                    baseBreakdowns[m] = FinancialCalculator.calculateMonthlyBreakdown(yr, mo, publicExpenses, privateExpenses)
+                }
+            }
+        }
+
+        return baseBreakdowns.toSortedMap()
     }
 
     fun getCategoryTotalsForMonth(month: String, isPrivate: Boolean): Map<String, Double> {
@@ -812,5 +1123,21 @@ class ExpenseViewModel(
         return list.filter { it.date.startsWith(month) && !it.isIncome }
             .groupBy { it.category }
             .mapValues { entry -> entry.value.sumOf { it.amount } }
+    }
+
+    private fun autoBackup() {
+        viewModelScope.launch {
+            _syncStatus.value = SyncStatus.SYNCING
+            val result = repository.backupAllData(currentUserId)
+            if (result.isSuccess) {
+                _syncStatus.value = SyncStatus.SYNCED
+            } else {
+                _syncStatus.value = SyncStatus.OFFLINE
+            }
+        }
+    }
+
+    fun initBackupRepository(context: android.content.Context) {
+        // No-op or silent init
     }
 }

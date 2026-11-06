@@ -58,6 +58,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import com.example.ui.util.CurrencyHelper
 import com.example.ui.util.ResponsiveModal
 import com.example.data.model.Expense
 import com.example.data.model.ExpenseCategories
@@ -86,14 +87,14 @@ fun ExpenseDialog(
     onCreateCategory: (String) -> Unit = {}
 ) {
     val todayDate = remember { SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date()) }
-    var isIncomeMode by remember { mutableStateOf(if (isPrivate) (initialExpense?.isIncome == true) else false) }
+    var isIncomeMode by remember { mutableStateOf(initialExpense?.isIncome == true) }
 
     // Dynamic category list
     var localCustomCategories by remember { mutableStateOf(customCategories) }
 
     fun getCategoryList(): List<String> {
         val base = when {
-            isIncomeMode && isPrivate -> ExpenseCategories.incomeCategories
+            isIncomeMode -> ExpenseCategories.incomeCategories
             isPrivate -> ExpenseCategories.privateCategories
             else -> ExpenseCategories.publicCategories.filter { it !in ExpenseCategories.incomeCategories }
         }
@@ -151,45 +152,43 @@ fun ExpenseDialog(
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
-                if (isPrivate) {
-                    // Toggle between Expense and Income in Vault mode
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        FilterChip(
-                            selected = !isIncomeMode,
-                            onClick = {
-                                isIncomeMode = false
-                                val newCats = getCategoryList()
-                                if (category !in newCats) {
-                                    category = newCats.firstOrNull() ?: "Food"
-                                }
-                            },
-                            label = { Text("Expense", fontWeight = FontWeight.SemiBold) },
-                            modifier = Modifier.weight(1f),
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = AccentBlue,
-                                selectedLabelColor = PureWhite
-                            )
+                // Toggle between Expense and Income
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    FilterChip(
+                        selected = !isIncomeMode,
+                        onClick = {
+                            isIncomeMode = false
+                            val newCats = getCategoryList()
+                            if (category !in newCats) {
+                                category = newCats.firstOrNull() ?: "Food"
+                            }
+                        },
+                        label = { Text("Expense", fontWeight = FontWeight.SemiBold) },
+                        modifier = Modifier.weight(1f),
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = AccentBlue,
+                            selectedLabelColor = PureWhite
                         )
-                        FilterChip(
-                            selected = isIncomeMode,
-                            onClick = {
-                                isIncomeMode = true
-                                val newCats = getCategoryList()
-                                if (category !in newCats) {
-                                    category = newCats.firstOrNull() ?: "Salary / Income"
-                                }
-                            },
-                            label = { Text("Income", fontWeight = FontWeight.SemiBold) },
-                            modifier = Modifier.weight(1f),
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = AccentGreen,
-                                selectedLabelColor = PureWhite
-                            )
+                    )
+                    FilterChip(
+                        selected = isIncomeMode,
+                        onClick = {
+                            isIncomeMode = true
+                            val newCats = getCategoryList()
+                            if (category !in newCats) {
+                                category = newCats.firstOrNull() ?: "Salary / Income"
+                            }
+                        },
+                        label = { Text("Income", fontWeight = FontWeight.SemiBold) },
+                        modifier = Modifier.weight(1f),
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = AccentGreen,
+                            selectedLabelColor = PureWhite
                         )
-                    }
+                    )
                 }
 
                 // Title
@@ -214,11 +213,11 @@ fun ExpenseDialog(
                             validationError = null
                         }
                     },
-                    label = { Text(if (isIncomeMode) "Income Amount (৳) *" else "Expense Amount (৳) *") },
+                    label = { Text(if (isIncomeMode) "Income Amount (${CurrencyHelper.currentCurrency.symbol}) *" else "Expense Amount (${CurrencyHelper.currentCurrency.symbol}) *") },
                     placeholder = { Text("0.00") },
                     leadingIcon = {
                         Text(
-                            text = "৳",
+                            text = CurrencyHelper.currentCurrency.symbol,
                             style = MaterialTheme.typography.titleLarge.copy(
                                 fontWeight = FontWeight.Bold,
                                 color = if (isIncomeMode) AccentGreen else AccentBlue
@@ -329,9 +328,10 @@ fun ExpenseDialog(
                 )
 
                 // Payment Method Card
+                // Payment Method Card
                 Column {
                     Text(
-                        text = if (isIncomeMode) "Received Via" else "Payment Method",
+                        text = if (isIncomeMode) "Deposit to Bank / Wallet *" else "Payment Method *",
                         style = MaterialTheme.typography.labelMedium.copy(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             fontWeight = FontWeight.Medium
@@ -362,18 +362,31 @@ fun ExpenseDialog(
                                 Icon(
                                     imageVector = Icons.Default.Payment,
                                     contentDescription = null,
-                                    tint = AccentBlue,
+                                    tint = if (isIncomeMode) AccentGreen else AccentBlue,
                                     modifier = Modifier.size(20.dp)
                                 )
                                 Spacer(modifier = Modifier.width(12.dp))
-                                Text(
-                                    text = paymentMethod,
-                                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium)
-                                )
+                                Column {
+                                    Text(
+                                        text = paymentMethod,
+                                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold)
+                                    )
+                                    val matchedAcc = bankAccounts.find { it.name.equals(paymentMethod, ignoreCase = true) }
+                                    if (isPrivate && matchedAcc != null) {
+                                        val autoActionText = if (isIncomeMode) "(will auto-credit)" else "(will auto-debit)"
+                                        Text(
+                                            text = "Balance: ${CurrencyHelper.format(matchedAcc.balance)} $autoActionText",
+                                            style = MaterialTheme.typography.labelSmall.copy(
+                                                color = if (isIncomeMode) AccentGreen else AccentBlue,
+                                                fontSize = 10.sp
+                                            )
+                                        )
+                                    }
+                                }
                             }
                             Icon(
                                 imageVector = Icons.Default.ArrowDropDown,
-                                contentDescription = "Change Payment Method",
+                                contentDescription = "Change Destination",
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
@@ -412,6 +425,10 @@ fun ExpenseDialog(
                     val amount = amountText.toDoubleOrNull()
                     if (amount == null || amount <= 0.0) {
                         validationError = "Please enter a valid amount"
+                        return@Button
+                    }
+                    if (isIncomeMode && paymentMethod.isBlank()) {
+                        validationError = "Please select a destination Bank Account or Wallet"
                         return@Button
                     }
                     onSave(
@@ -704,9 +721,9 @@ fun ExpenseDialog(
                                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.SemiBold
                                             )
                                         )
-                                        if (matchingAccount != null) {
+                                        if (isPrivate && matchingAccount != null) {
                                             Text(
-                                                text = "Current Balance: ৳${matchingAccount.balance.toInt()}",
+                                                text = "Current Balance: ${CurrencyHelper.format(matchingAccount.balance)}",
                                                 style = MaterialTheme.typography.labelSmall.copy(
                                                     color = AccentGreen,
                                                     fontWeight = FontWeight.Medium

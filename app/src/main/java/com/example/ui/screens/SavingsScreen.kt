@@ -111,6 +111,7 @@ fun SavingsScreen(
     var accountToDelete by remember { mutableStateOf<BankAccount?>(null) }
     var targetDepositBank by remember { mutableStateOf<String?>(null) }
     var selectedHistoryBank by remember { mutableStateOf("All Accounts") }
+    var selectedHistoryType by remember { mutableStateOf("All") }
 
     val totalSavings = bankAccounts.sumOf { it.balance }
 
@@ -126,12 +127,20 @@ fun SavingsScreen(
     }
 
     val bankHistoryList = allTransactions.filter { exp ->
-        if (selectedHistoryBank == "All Accounts") {
+        val bankMatches = if (selectedHistoryBank == "All Accounts") {
             true
         } else {
             exp.paymentMethod.contains(selectedHistoryBank, ignoreCase = true) ||
                     selectedHistoryBank.contains(exp.paymentMethod, ignoreCase = true)
         }
+        
+        val typeMatches = when (selectedHistoryType) {
+            "Deposits" -> exp.isActualIncome
+            "Withdrawals" -> exp.isActualExpense
+            "Transfers" -> exp.isTransfer
+            else -> true
+        }
+        bankMatches && typeMatches
     }.sortedByDescending { it.date }
 
     LazyColumn(
@@ -359,26 +368,50 @@ fun SavingsScreen(
 
         // Account Filter Chips for History
         item {
-            val historyFilterBanks = remember(bankAccounts) {
-                listOf("All Accounts") + bankAccounts.map { it.name }
-            }
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                historyFilterBanks.forEach { bName ->
-                    val isSel = bName == selectedHistoryBank
-                    FilterChip(
-                        selected = isSel,
-                        onClick = { selectedHistoryBank = bName },
-                        label = { Text(bName, fontWeight = if (isSel) FontWeight.Bold else FontWeight.Medium) },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = AccentGold,
-                            selectedLabelColor = DeepNavy
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                val historyFilterBanks = remember(bankAccounts) {
+                    listOf("All Accounts") + bankAccounts.map { it.name }
+                }
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    historyFilterBanks.forEach { bName ->
+                        val isSel = bName == selectedHistoryBank
+                        FilterChip(
+                            selected = isSel,
+                            onClick = { selectedHistoryBank = bName },
+                            label = { Text(bName, fontWeight = if (isSel) FontWeight.Bold else FontWeight.Medium) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = AccentGold,
+                                selectedLabelColor = DeepNavy
+                            )
                         )
-                    )
+                    }
+                }
+
+                // Transaction Type Filter Chips
+                val types = listOf("All", "Deposits", "Withdrawals", "Transfers")
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    types.forEach { type ->
+                        val isSel = type == selectedHistoryType
+                        FilterChip(
+                            selected = isSel,
+                            onClick = { selectedHistoryType = type },
+                            label = { Text(type, fontWeight = if (isSel) FontWeight.Bold else FontWeight.Medium) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = AccentBlue,
+                                selectedLabelColor = PureWhite
+                            )
+                        )
+                    }
                 }
             }
         }
@@ -413,6 +446,7 @@ fun SavingsScreen(
         DepositFundsDialog(
             bankAccounts = bankAccounts,
             preselectedBank = targetDepositBank,
+            currencySymbol = currencySymbol,
             onDismiss = { showDepositDialog = false },
             onDeposit = { bankName, amount, note ->
                 viewModel.depositToBank(bankName, amount, note)
@@ -425,6 +459,7 @@ fun SavingsScreen(
     if (showTransferDialog) {
         TransferFundsDialog(
             bankAccounts = bankAccounts,
+            currencySymbol = currencySymbol,
             onDismiss = { showTransferDialog = false },
             onTransfer = { from, to, amount ->
                 viewModel.transferBetweenBanks(from, to, amount)
@@ -607,6 +642,14 @@ fun SavingsHistoryItemCard(
     currencySymbol: String
 ) {
     val isIncome = expense.isIncome
+    val isTransfer = expense.isTransfer
+    
+    val (label, tint, icon) = when {
+        isTransfer -> Triple("TRANSFER", AccentBlue, Icons.Default.SwapHoriz)
+        isIncome -> Triple("DEPOSIT", AccentGreen, Icons.Default.ArrowDownward)
+        else -> Triple("WITHDRAWAL", AccentRed, Icons.Default.ArrowUpward)
+    }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -627,14 +670,14 @@ fun SavingsHistoryItemCard(
             ) {
                 Surface(
                     shape = CircleShape,
-                    color = if (isIncome) AccentGreen.copy(alpha = 0.15f) else AccentRed.copy(alpha = 0.15f),
+                    color = tint.copy(alpha = 0.15f),
                     modifier = Modifier.size(40.dp)
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Icon(
-                            imageVector = if (isIncome) Icons.Default.ArrowDownward else Icons.Default.ArrowUpward,
+                            imageVector = icon,
                             contentDescription = null,
-                            tint = if (isIncome) AccentGreen else AccentRed,
+                            tint = tint,
                             modifier = Modifier.size(20.dp)
                         )
                     }
@@ -672,21 +715,21 @@ fun SavingsHistoryItemCard(
 
             Column(horizontalAlignment = Alignment.End) {
                 Text(
-                    text = "${if (isIncome) "+" else "-"}${CurrencyHelper.format(expense.amount, currencySymbol)}",
+                    text = "${if (isTransfer) "" else if (isIncome) "+" else "-"}${CurrencyHelper.format(expense.amount, currencySymbol)}",
                     style = MaterialTheme.typography.titleMedium.copy(
                         fontWeight = FontWeight.ExtraBold,
-                        color = if (isIncome) AccentGreen else AccentRed
+                        color = if (isTransfer) AccentBlue else if (isIncome) AccentGreen else AccentRed
                     )
                 )
                 Surface(
                     shape = RoundedCornerShape(6.dp),
-                    color = if (isIncome) AccentGreen.copy(alpha = 0.12f) else AccentRed.copy(alpha = 0.12f)
+                    color = tint.copy(alpha = 0.12f)
                 ) {
                     Text(
-                        text = if (isIncome) "DEPOSIT" else "WITHDRAWAL",
+                        text = label,
                         style = MaterialTheme.typography.labelSmall.copy(
                             fontWeight = FontWeight.Bold,
-                            color = if (isIncome) AccentGreen else AccentRed,
+                            color = tint,
                             fontSize = 9.sp
                         ),
                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
@@ -702,6 +745,7 @@ fun SavingsHistoryItemCard(
 fun DepositFundsDialog(
     bankAccounts: List<BankAccount>,
     preselectedBank: String?,
+    currencySymbol: String,
     onDismiss: () -> Unit,
     onDeposit: (bankName: String, amount: Double, note: String?) -> Unit
 ) {
@@ -738,7 +782,7 @@ fun DepositFundsDialog(
                     ) {
                         bankAccounts.forEach { acc ->
                             DropdownMenuItem(
-                                text = { Text("${acc.name} (Balance: ৳${acc.balance.toInt()})") },
+                                text = { Text("${acc.name} (Balance: ${CurrencyHelper.format(acc.balance, currencySymbol)})") },
                                 onClick = {
                                     selectedBank = acc.name
                                     expanded = false
@@ -751,7 +795,7 @@ fun DepositFundsDialog(
                 OutlinedTextField(
                     value = amountText,
                     onValueChange = { amountText = it },
-                    label = { Text("Deposit Amount (৳)") },
+                    label = { Text("Deposit Amount (${CurrencyHelper.currentCurrency.symbol})") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     modifier = Modifier.fillMaxWidth().testTag("deposit_amount_input")
                 )
@@ -789,6 +833,7 @@ fun DepositFundsDialog(
 @Composable
 fun TransferFundsDialog(
     bankAccounts: List<BankAccount>,
+    currencySymbol: String,
     onDismiss: () -> Unit,
     onTransfer: (fromBank: String, toBank: String, amount: Double) -> Unit
 ) {
@@ -824,7 +869,7 @@ fun TransferFundsDialog(
                     ) {
                         bankAccounts.forEach { acc ->
                             DropdownMenuItem(
-                                text = { Text("${acc.name} (৳${acc.balance.toInt()})") },
+                                text = { Text("${acc.name} (${CurrencyHelper.format(acc.balance, currencySymbol)})") },
                                 onClick = {
                                     fromBank = acc.name
                                     fromExpanded = false
@@ -868,7 +913,7 @@ fun TransferFundsDialog(
                         amountText = it
                         error = null
                     },
-                    label = { Text("Transfer Amount (৳)") },
+                    label = { Text("Transfer Amount (${CurrencyHelper.currentCurrency.symbol})") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     modifier = Modifier.fillMaxWidth().testTag("transfer_amount_input")
                 )
@@ -932,7 +977,7 @@ fun EditAccountDialog(
                 OutlinedTextField(
                     value = balanceText,
                     onValueChange = { balanceText = it },
-                    label = { Text("Current Balance (৳)") },
+                    label = { Text("Current Balance (${CurrencyHelper.currentCurrency.symbol})") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     modifier = Modifier.fillMaxWidth().testTag("edit_balance_input")
                 )
@@ -1005,7 +1050,7 @@ fun AddAccountDialog(
                 OutlinedTextField(
                     value = balanceText,
                     onValueChange = { balanceText = it },
-                    label = { Text("Starting Balance (৳)") },
+                    label = { Text("Starting Balance (${CurrencyHelper.currentCurrency.symbol})") },
                     placeholder = { Text("e.g. 25000") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     modifier = Modifier.fillMaxWidth().testTag("add_bank_balance_input")
