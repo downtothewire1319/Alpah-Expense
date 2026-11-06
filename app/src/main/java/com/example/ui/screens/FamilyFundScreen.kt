@@ -35,6 +35,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.example.data.model.ExpenseCategories
 import com.example.data.model.FamilyFundTransfer
 import com.example.data.model.FamilyMember
@@ -60,6 +61,7 @@ fun FamilyFundScreen(
     val familyTransfers by viewModel.familyTransfers.collectAsState()
     val bankAccounts by viewModel.bankAccounts.collectAsState()
     val currency by viewModel.selectedCurrency.collectAsState()
+    val userProfileName by viewModel.userProfileName.collectAsState()
 
     var showRecordTransferDialog by remember { mutableStateOf(false) }
     var selectedMemberForTransfer by remember { mutableStateOf<FamilyMember?>(null) }
@@ -82,7 +84,7 @@ fun FamilyFundScreen(
                         )
                         Text(
                             text = "Track transfers & member statements",
-                            style = MaterialTheme.typography.bodySmall.copy(color = MutedSlate)
+                            style = MaterialTheme.typography.bodySmall.copy(color = MutedSlate, fontSize = 12.sp)
                         )
                     }
                 },
@@ -169,9 +171,18 @@ fun FamilyFundScreen(
                                 memberName = member.name,
                                 dateRangeLabel = "All Time",
                                 transfers = memberTransfers,
-                                currencySymbol = currency.symbol
+                                currencySymbol = currency.symbol,
+                                userName = userProfileName
                             )
                         }
+                    )
+                }
+
+                item {
+                    SavingsScreen(
+                        viewModel = viewModel,
+                        showInlineHistory = false,
+                        modifier = Modifier.padding(horizontal = 14.dp)
                     )
                 }
             }

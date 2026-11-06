@@ -163,15 +163,6 @@ fun BudgetScreen(
             }
 
 
-            // Savings Tracker
-            item {
-                SavingsTrackerCard(
-                    totalIncome = monthTotalIncome,
-                    totalSpent = monthTotalSpent,
-                    totalBudget = totalBudget,
-                    currencySymbol = currency.symbol
-                )
-            }
         }
     }
 
@@ -270,7 +261,7 @@ fun BudgetStatusCard(
                     )
                     Text(
                         text = if (hasBudget) "of ${CurrencyHelper.format(budgetAmount, currencySymbol)} budget" else "of no budget limit",
-                        style = MaterialTheme.typography.bodySmall.copy(color = MutedSlate)
+                        style = MaterialTheme.typography.bodySmall.copy(color = MutedSlate, fontSize = 12.sp)
                     )
                 }
 
@@ -278,7 +269,7 @@ fun BudgetStatusCard(
                     if (hasBudget) {
                         Text(
                             text = if (isOverBudget) "Exceeded by" else "Remaining",
-                            style = MaterialTheme.typography.labelSmall.copy(color = MutedSlate)
+                            style = MaterialTheme.typography.labelSmall.copy(color = MutedSlate, fontSize = 12.sp)
                         )
                         Text(
                             text = CurrencyHelper.format(kotlin.math.abs(remainingAmount), currencySymbol),
@@ -290,7 +281,7 @@ fun BudgetStatusCard(
                     } else {
                         Text(
                             text = "Remaining",
-                            style = MaterialTheme.typography.labelSmall.copy(color = MutedSlate)
+                            style = MaterialTheme.typography.labelSmall.copy(color = MutedSlate, fontSize = 12.sp)
                         )
                         Text(
                             text = "--",
@@ -319,115 +310,14 @@ fun BudgetStatusCard(
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
                     text = "No budget limit set for this month. Tap Adjust to set one.",
-                    style = MaterialTheme.typography.labelSmall.copy(color = MutedSlate)
+                    style = MaterialTheme.typography.labelSmall.copy(color = MutedSlate, fontSize = 12.sp)
                 )
             }
         }
     }
 }
 
-@Composable
-fun SavingsTrackerCard(
-    totalIncome: Double,
-    totalSpent: Double,
-    totalBudget: Double,
-    currencySymbol: String
-) {
-    val netMonthlySavings = totalIncome - totalSpent
-    val isPositiveSavings = netMonthlySavings >= 0
 
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-    ) {
-        Column(modifier = Modifier.padding(20.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Surface(
-                    modifier = Modifier.size(48.dp),
-                    shape = CircleShape,
-                    color = (if (isPositiveSavings) AccentGreen else AccentRed).copy(alpha = 0.15f)
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            imageVector = Icons.Default.Savings,
-                            contentDescription = null,
-                            tint = if (isPositiveSavings) AccentGreen else AccentRed,
-                            modifier = Modifier.size(26.dp)
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.width(16.dp))
-
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Net Monthly Cash Savings",
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-                    )
-                    Text(
-                        text = if (isPositiveSavings) "Surplus saved this month" else "Deficit / Overspent this month",
-                        style = MaterialTheme.typography.bodySmall.copy(color = MutedSlate)
-                    )
-                }
-
-                Text(
-                    text = "${if (isPositiveSavings) "+" else "-"}${CurrencyHelper.format(kotlin.math.abs(netMonthlySavings), currencySymbol)}",
-                    style = MaterialTheme.typography.titleLarge.copy(
-                        fontWeight = FontWeight.ExtraBold,
-                        color = if (isPositiveSavings) AccentGreen else AccentRed
-                    )
-                )
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Surface(
-                shape = RoundedCornerShape(12.dp),
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(12.dp),
-                    horizontalArrangement = Arrangement.SpaceAround
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("Month Inflow", style = MaterialTheme.typography.labelSmall.copy(color = MutedSlate))
-                        Text(
-                            "+${CurrencyHelper.format(totalIncome, currencySymbol)}",
-                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold, color = AccentGreen)
-                        )
-                    }
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("Month Outflow", style = MaterialTheme.typography.labelSmall.copy(color = MutedSlate))
-                        Text(
-                            "-${CurrencyHelper.format(totalSpent, currencySymbol)}",
-                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold, color = AccentRed)
-                        )
-                    }
-                    if (totalBudget > 0) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("Budget Left", style = MaterialTheme.typography.labelSmall.copy(color = MutedSlate))
-                            val bRem = totalBudget - totalSpent
-                            Text(
-                                CurrencyHelper.format(bRem, currencySymbol),
-                                style = MaterialTheme.typography.bodyMedium.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (bRem >= 0) AccentBlue else AccentRed
-                                )
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
 
 
 @Composable

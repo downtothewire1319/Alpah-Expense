@@ -8,6 +8,8 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.core.content.FileProvider
 import com.example.data.model.FamilyFundTransfer
+import com.google.firebase.Firebase
+import com.google.firebase.auth.auth
 import java.io.File
 import java.io.FileOutputStream
 import java.text.SimpleDateFormat
@@ -21,13 +23,15 @@ object FamilyFundStatementHelper {
         memberName: String,
         dateRangeLabel: String,
         transfers: List<FamilyFundTransfer>,
-        currencySymbol: String
+        currencySymbol: String,
+        userName: String = ""
     ) {
         val htmlContent = buildHtmlStatement(
             memberName = memberName,
             dateRangeLabel = dateRangeLabel,
             transfers = transfers,
-            currencySymbol = currencySymbol
+            currencySymbol = currencySymbol,
+            userName = userName
         )
 
         val printManager = context.getSystemService(Context.PRINT_SERVICE) as? PrintManager
@@ -149,8 +153,10 @@ object FamilyFundStatementHelper {
         memberName: String,
         dateRangeLabel: String,
         transfers: List<FamilyFundTransfer>,
-        currencySymbol: String
+        currencySymbol: String,
+        userName: String = ""
     ): String {
+        val effectiveUserName = userName.ifBlank { com.google.firebase.Firebase.auth.currentUser?.displayName ?: "Account Holder" }
         val totalAmount = transfers.sumOf { it.amount }
         val count = transfers.size
         val dateGen = SimpleDateFormat("dd MMMM yyyy, hh:mm a", Locale.US).format(Date())
@@ -290,6 +296,7 @@ object FamilyFundStatementHelper {
                 <span class="badge">OFFICIAL PERSONAL RECORD</span>
                 <h1 class="title">FAMILY FUND TRANSFER STATEMENT</h1>
                 <div class="meta">
+                    <strong>Account Holder:</strong> $effectiveUserName &nbsp;|&nbsp; 
                     <strong>Recipient / Family Member:</strong> $memberName &nbsp;|&nbsp; 
                     <strong>Date Scope:</strong> $dateRangeLabel &nbsp;|&nbsp; 
                     <strong>Generated:</strong> $dateGen

@@ -237,7 +237,7 @@ fun CombinedHeroCard(
                                     text = "Public (Family)",
                                     style = MaterialTheme.typography.labelSmall.copy(
                                         color = SoftWhite.copy(alpha = 0.7f),
-                                        fontSize = 11.sp
+                                        fontSize = 12.sp
                                     )
                                 )
                             }
@@ -273,7 +273,7 @@ fun CombinedHeroCard(
                                     text = "Private (Personal)",
                                     style = MaterialTheme.typography.labelSmall.copy(
                                         color = SoftWhite.copy(alpha = 0.7f),
-                                        fontSize = 11.sp
+                                        fontSize = 12.sp
                                     )
                                 )
                             }
@@ -513,7 +513,7 @@ fun CategoryComparisonCard(
                                         text = "(Private)",
                                         style = MaterialTheme.typography.labelSmall.copy(
                                             color = AccentGold,
-                                            fontSize = 10.sp
+                                            fontSize = 12.sp
                                         )
                                     )
                                 }

@@ -7,6 +7,8 @@ import android.print.PrintManager
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import com.example.data.model.Expense
+import com.google.firebase.Firebase
+import com.google.firebase.auth.auth
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -26,12 +28,16 @@ object FinancialInvoiceHelper {
         currencySymbol: String,
         isAggregate: Boolean = false
     ) {
+        val loggedInUser = Firebase.auth.currentUser
+        val effectiveUserName = userName.ifBlank { loggedInUser?.displayName ?: "Account Holder" }
+        val effectiveUserEmail = (loggedInUser?.email ?: "").ifBlank { userEmail }
+
         val htmlContent = buildHtmlInvoice(
             transactions = transactions,
             title = title,
             periodLabel = periodLabel,
-            userName = userName,
-            userEmail = userEmail,
+            userName = effectiveUserName,
+            userEmail = effectiveUserEmail,
             currencySymbol = currencySymbol,
             isAggregate = isAggregate
         )
@@ -86,10 +92,10 @@ object FinancialInvoiceHelper {
         isAggregate: Boolean = false
     ): String {
         val displayTransactions = if (isAggregate) aggregateTransactionsByMonth(transactions) else transactions
-        val actualExpenses = displayTransactions.filter { it.isActualExpense }
-        val actualIncomes = displayTransactions.filter { it.isActualIncome }
-        val totalSpent = actualExpenses.sumOf { it.amount }
-        val totalIncome = actualIncomes.sumOf { it.amount }
+        val creditsList = displayTransactions.filter { it.isIncome }
+        val debitsList = displayTransactions.filter { !it.isIncome }
+        val totalSpent = debitsList.sumOf { it.amount }
+        val totalIncome = creditsList.sumOf { it.amount }
         val netBalance = totalIncome - totalSpent
         val dateGen = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US).format(Date())
 
@@ -134,14 +140,14 @@ object FinancialInvoiceHelper {
         isAggregate: Boolean = false
     ): String {
         val displayTransactions = if (isAggregate) aggregateTransactionsByMonth(transactions) else transactions
-        val actualExpenses = displayTransactions.filter { it.isActualExpense }
-        val actualIncomes = displayTransactions.filter { it.isActualIncome }
-        val totalSpent = actualExpenses.sumOf { it.amount }
-        val totalIncome = actualIncomes.sumOf { it.amount }
+        val creditsList = displayTransactions.filter { it.isIncome }
+        val debitsList = displayTransactions.filter { !it.isIncome }
+        val totalSpent = debitsList.sumOf { it.amount }
+        val totalIncome = creditsList.sumOf { it.amount }
         val netBalance = totalIncome - totalSpent
         val dateGen = SimpleDateFormat("MMMM dd, yyyy", Locale.US).format(Date())
 
-        val categoryRows = actualExpenses.groupBy { it.category }
+        val categoryRows = debitsList.groupBy { it.category }
             .mapValues { it.value.sumOf { e -> e.amount } }
             .entries.sortedByDescending { it.value }
             .take(6)
@@ -293,17 +299,9 @@ object FinancialInvoiceHelper {
                 </table>
 
                 <div class="summary-cards">
-                    <div class="summary-card">
-                        <div class="summary-label">Total Income</div>
-                        <div class="summary-value" style="color:#2e7d32;">+$currencySymbol ${String.format(Locale.US, "%,.2f", totalIncome)}</div>
-                    </div>
-                    <div class="summary-card">
+                    <div class="summary-card" style="border-right: none;">
                         <div class="summary-label">Total Expenses</div>
-                        <div class="summary-value" style="color:#c62828;">-$currencySymbol ${String.format(Locale.US, "%,.2f", totalSpent)}</div>
-                    </div>
-                    <div class="summary-card">
-                        <div class="summary-label">Net Balance</div>
-                        <div class="summary-value" style="color:${if (netBalance >= 0) "#0A192F" else "#c62828"};">$currencySymbol ${String.format(Locale.US, "%,.2f", netBalance)}</div>
+                        <div class="summary-value" style="color:#c62828; font-size: 24px;">$currencySymbol ${String.format(Locale.US, "%,.2f", totalSpent)}</div>
                     </div>
                 </div>
 

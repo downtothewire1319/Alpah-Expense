@@ -68,7 +68,8 @@ data class FinancialSummary(
     val privateMonthlyTrend: Map<String, Double> = emptyMap(),
     val combinedMonthlyTrend: Map<String, Double> = emptyMap(),
     val combinedMonthlySavingsTrend: Map<String, Double> = emptyMap(),
-    val monthlySavingsBreakdowns: Map<String, MonthlySavingsBreakdown> = emptyMap()
+    val monthlySavingsBreakdowns: Map<String, MonthlySavingsBreakdown> = emptyMap(),
+    val currentYearCost: Double = 0.0
 ) {
     val totalPublic: Double get() = totalPublicCost
     val totalPrivate: Double get() = totalPrivateCost
@@ -108,13 +109,20 @@ class ExpenseViewModel(
         return (baseList + _customCategories.value).distinct()
     }
 
+    // Cache preservation to prevent transient data loss during sync/loading
+    private var lastPublicExpensesCache: List<Expense> = emptyList()
+    private var lastPrivateExpensesCache: List<Expense> = emptyList()
+
+    private val _isDataInitialized = MutableStateFlow(false)
+    val isDataInitialized: StateFlow<Boolean> = _isDataInitialized.asStateFlow()
+
     // Public Expenses state
     val publicExpensesState: StateFlow<UiState<List<Expense>>> = repository.observePublicExpenses()
         .map<List<Expense>, UiState<List<Expense>>> { UiState.Success(it) }
         .catch { emit(UiState.Error(it.message ?: "Failed to load public expenses")) }
         .stateIn(
             scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000L),
+            started = SharingStarted.Eagerly,
             initialValue = UiState.Loading
         )
 
@@ -136,7 +144,7 @@ class ExpenseViewModel(
     val currentBudget: StateFlow<Budget?> = repository.observeBudget(currentMonthKey)
         .stateIn(
             scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000L),
+            started = SharingStarted.Eagerly,
             initialValue = null
         )
 
@@ -148,7 +156,7 @@ class ExpenseViewModel(
     val bankAccounts: StateFlow<List<BankAccount>> = repository.observeBankAccounts()
         .stateIn(
             scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000L),
+            started = SharingStarted.Eagerly,
             initialValue = ExpenseCategories.defaultBankAccounts
         )
 
@@ -156,14 +164,14 @@ class ExpenseViewModel(
     val familyMembers: StateFlow<List<FamilyMember>> = repository.observeFamilyMembers()
         .stateIn(
             scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000L),
+            started = SharingStarted.Eagerly,
             initialValue = ExpenseCategories.defaultFamilyMembers
         )
 
     val familyTransfers: StateFlow<List<FamilyFundTransfer>> = repository.observeFamilyTransfers()
         .stateIn(
             scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000L),
+            started = SharingStarted.Eagerly,
             initialValue = emptyList()
         )
 
@@ -175,9 +183,17 @@ class ExpenseViewModel(
     val userProfile: StateFlow<UserProfile?> = repository.observeUserProfile()
         .stateIn(
             scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000L),
+            started = SharingStarted.Eagerly,
             initialValue = null
         )
+
+    val userProfileName: StateFlow<String> = combine(userProfile, PinSecurityManager.isPrivateUnlocked) { profile, _ ->
+        profile?.name?.ifBlank { null } ?: repository.getCurrentUser()?.displayName ?: "User"
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000L),
+        initialValue = "User"
+    )
 
     private val _syncStatus = MutableStateFlow(SyncStatus.SYNCED)
     val syncStatus: StateFlow<SyncStatus> = _syncStatus.asStateFlow()
@@ -957,17 +973,40 @@ class ExpenseViewModel(
         return result.toSortedMap()
     }
 
-    // Financial Summary (Reactive StateFlow)
+    // Financial Summary (Reactive StateFlow with Cache Preservation)
     val financialSummary: StateFlow<FinancialSummary> = combine(
         publicExpensesState,
         privateExpenses,
         isPrivateUnlocked
     ) { publicState, privateList, isUnlocked ->
-        val publicList = (publicState as? UiState.Success)?.data ?: emptyList()
-        computeSummaryInternal(publicList, privateList, isUnlocked)
+        val publicList = when (publicState) {
+            is UiState.Success -> {
+                lastPublicExpensesCache = publicState.data
+                _isDataInitialized.value = true
+                publicState.data
+            }
+            is UiState.Loading -> {
+                lastPublicExpensesCache
+            }
+            is UiState.Error -> {
+                _isDataInitialized.value = true
+                lastPublicExpensesCache
+            }
+        }
+        val effectivePrivateList = if (isUnlocked) {
+            if (privateList.isNotEmpty()) {
+                lastPrivateExpensesCache = privateList
+                privateList
+            } else {
+                lastPrivateExpensesCache
+            }
+        } else {
+            emptyList()
+        }
+        computeSummaryInternal(publicList, effectivePrivateList, isUnlocked)
     }.stateIn(
         scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000L),
+        started = SharingStarted.Eagerly,
         initialValue = FinancialSummary()
     )
 
@@ -977,6 +1016,7 @@ class ExpenseViewModel(
         isUnlocked: Boolean
     ): FinancialSummary {
         val currentMonth = currentMonthKey
+        val currentYear = currentMonth.take(4) // e.g. "2024"
 
         // Filter out transfers for income/expense calculations
         val actualPublicIncomeList = publicList.filter { it.isActualIncome }
@@ -1026,7 +1066,8 @@ class ExpenseViewModel(
                 publicCategoryTotals = publicCatTotals,
                 publicMonthlyTrend = publicTrend,
                 combinedMonthlySavingsTrend = combinedSavingsTrend,
-                monthlySavingsBreakdowns = savingsBreakdowns
+                monthlySavingsBreakdowns = savingsBreakdowns,
+                currentYearCost = actualPublicCostList.filter { it.date.startsWith(currentYear) }.sumOf { it.amount }
             )
         }
 
@@ -1059,6 +1100,8 @@ class ExpenseViewModel(
 
         val combinedTrend = buildMonthlyTrend(combinedCostList)
 
+        val currentYearCost = combinedCostList.filter { it.date.startsWith(currentYear) }.sumOf { it.amount }
+
         return FinancialSummary(
             totalIncome = combinedIncome,
             totalCost = combinedCost,
@@ -1082,7 +1125,8 @@ class ExpenseViewModel(
             privateMonthlyTrend = privateTrend,
             combinedMonthlyTrend = combinedTrend,
             combinedMonthlySavingsTrend = combinedSavingsTrend,
-            monthlySavingsBreakdowns = savingsBreakdowns
+            monthlySavingsBreakdowns = savingsBreakdowns,
+            currentYearCost = currentYearCost
         )
     }
 

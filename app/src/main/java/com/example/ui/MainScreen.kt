@@ -16,6 +16,7 @@ import androidx.compose.material.icons.filled.ReceiptLong
 import androidx.compose.material.icons.filled.Savings
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Summarize
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -57,6 +58,13 @@ import com.example.ui.theme.AccentBlue
 import com.example.ui.theme.AccentGold
 import com.example.ui.theme.DeepNavy
 import com.example.ui.theme.MutedSlate
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.ui.Alignment
+
 import com.example.ui.theme.PureWhite
 import com.example.ui.viewmodel.ExpenseViewModel
 
@@ -85,6 +93,7 @@ fun MainScreen(
     val statusMessage by viewModel.statusMessage.collectAsState()
     val customCategories by viewModel.customCategories.collectAsState()
     val bankAccounts by viewModel.bankAccounts.collectAsState()
+    val isDataInitialized by viewModel.isDataInitialized.collectAsState()
 
     var showAddTransactionDialog by remember { mutableStateOf(false) }
     var showStealthPinDialog by remember { mutableStateOf(false) }
@@ -130,7 +139,33 @@ fun MainScreen(
         }
     }
 
-    if (isTablet) {
+    if (!isDataInitialized) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(DeepNavy),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                CircularProgressIndicator(
+                    color = AccentGold,
+                    strokeWidth = 3.dp,
+                    modifier = Modifier.size(44.dp)
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    text = "Initializing Database Cache & Financial Data...",
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        color = PureWhite.copy(alpha = 0.85f),
+                        fontWeight = FontWeight.Medium
+                    )
+                )
+            }
+        }
+    } else if (isTablet) {
         Row(modifier = Modifier.fillMaxSize()) {
             NavigationRail(
                 containerColor = MaterialTheme.colorScheme.surface,
@@ -181,67 +216,80 @@ fun MainScreen(
             }
         }
     } else {
-        Scaffold(
-            snackbarHost = { SnackbarHost(snackbarHostState) },
-            bottomBar = {
-                NavigationBar(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    tonalElevation = 8.dp
-                ) {
-                    screens.forEach { screen ->
-                        val isSelected = currentScreen == screen
-                        val activeColor = if (isVaultActive) AccentGold else AccentBlue
-                        val labelText = if (screen == NavigationScreen.FAMILY_FUND && isVaultActive) "Family" else screen.label
+    Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
+        bottomBar = {
+            NavigationBar(
+                containerColor = MaterialTheme.colorScheme.surface,
+                tonalElevation = 8.dp
+            ) {
+                screens.forEach { screen ->
+                    val isSelected = currentScreen == screen
+                    val activeColor = if (isVaultActive) AccentGold else AccentBlue
+                    val labelText = if (screen == NavigationScreen.FAMILY_FUND && isVaultActive) "Family" else screen.label
 
-                        NavigationBarItem(
-                            selected = isSelected,
-                            onClick = {
-                                viewModel.onUserActivity()
-                                currentScreen = screen
-                            },
-                            icon = {
-                                Icon(
-                                    imageVector = screen.icon,
-                                    contentDescription = labelText,
-                                    tint = if (isSelected) activeColor else MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(24.dp)
+                    NavigationBarItem(
+                        selected = isSelected,
+                        onClick = {
+                            viewModel.onUserActivity()
+                            currentScreen = screen
+                        },
+                        icon = {
+                            Icon(
+                                imageVector = screen.icon,
+                                contentDescription = labelText,
+                                tint = if (isSelected) activeColor else MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        },
+                        label = {
+                            Text(
+                                text = labelText,
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                    fontSize = 12.sp
                                 )
-                            },
-                            label = {
-                                Text(
-                                    text = labelText,
-                                    style = MaterialTheme.typography.labelSmall.copy(
-                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                        fontSize = 11.sp
-                                    )
-                                )
-                            },
-                            colors = NavigationBarItemDefaults.colors(
-                                indicatorColor = activeColor.copy(alpha = 0.15f)
-                            ),
-                            modifier = Modifier.testTag("bottom_nav_${screen.name.lowercase()}")
-                        )
-                    }
+                            )
+                        },
+                        colors = NavigationBarItemDefaults.colors(
+                            indicatorColor = activeColor.copy(alpha = 0.15f)
+                        ),
+                        modifier = Modifier.testTag("bottom_nav_${screen.name.lowercase()}")
+                    )
                 }
             }
-        ) { innerPadding ->
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding)
+        },
+        floatingActionButton = {
+            androidx.compose.material3.FloatingActionButton(
+                onClick = { showAddTransactionDialog = true },
+                containerColor = if (isVaultActive) AccentGold else AccentBlue,
+                contentColor = if (isVaultActive) DeepNavy else PureWhite,
+                modifier = Modifier.testTag("global_add_transaction_fab")
             ) {
-                ScreenContent(
-                    screen = currentScreen,
-                    viewModel = viewModel,
-                    coroutineScope = coroutineScope,
-                    onNavigateToExpenses = { currentScreen = NavigationScreen.EXPENSES },
-                    onNavigateToFamily = { currentScreen = NavigationScreen.FAMILY_FUND },
-                    onOpenAddTransaction = { showAddTransactionDialog = true },
-                    onSignOutSuccess = onSignOutSuccess,
-                    onRequestStealthPin = { showStealthPinDialog = true }
+                Icon(
+                    imageVector = Icons.Default.Add,
+                    contentDescription = "Add Transaction"
                 )
             }
         }
+    ) { innerPadding ->
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+        ) {
+            ScreenContent(
+                screen = currentScreen,
+                viewModel = viewModel,
+                coroutineScope = coroutineScope,
+                onNavigateToExpenses = { currentScreen = NavigationScreen.EXPENSES },
+                onNavigateToFamily = { currentScreen = NavigationScreen.FAMILY_FUND },
+                onOpenAddTransaction = { showAddTransactionDialog = true },
+                onSignOutSuccess = onSignOutSuccess,
+                onRequestStealthPin = { showStealthPinDialog = true }
+            )
+        }
+    }
     }
 
     // Add Transaction Dialog (Accessible from Home or FAB)

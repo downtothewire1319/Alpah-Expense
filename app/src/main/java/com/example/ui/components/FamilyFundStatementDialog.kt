@@ -90,6 +90,7 @@ fun FamilyFundStatementDialog(
     members: List<FamilyMember>,
     allTransfers: List<FamilyFundTransfer>,
     currencySymbol: String,
+    userProfileName: String = "User",
     onDismiss: () -> Unit,
     onEditTransfer: (FamilyFundTransfer) -> Unit,
     onDeleteTransfer: (FamilyFundTransfer) -> Unit,
@@ -218,7 +219,8 @@ fun FamilyFundStatementDialog(
                                     memberName = activeMemberName,
                                     dateRangeLabel = selectedPeriod,
                                     transfers = filteredTransfers,
-                                    currencySymbol = currencySymbol
+                                    currencySymbol = currencySymbol,
+                                    userName = userProfileName
                                 )
                             },
                             modifier = Modifier.size(36.dp).testTag("print_family_statement_button")

@@ -92,7 +92,6 @@ fun PublicExpensesScreen(
     val currentBudget by viewModel.currentBudget.collectAsState()
     val currencySymbol = currency.symbol
 
-    var vaultSubTab by remember { mutableStateOf(0) } // 0: Transactions, 1: Monthly Savings & Banks
     var searchQuery by remember { mutableStateOf("") }
     var selectedCategory by remember { mutableStateOf("All") }
     var showAddDialog by remember { mutableStateOf(false) }
@@ -139,28 +138,13 @@ fun PublicExpensesScreen(
                         )
                         Text(
                             text = if (isVaultActive) "Personal Vault Mode" else "Household Log",
-                            style = MaterialTheme.typography.labelSmall.copy(color = MutedSlate)
+                            style = MaterialTheme.typography.labelSmall.copy(color = MutedSlate, fontSize = 12.sp)
                         )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
             )
         },
-        floatingActionButton = {
-            FloatingActionButton(
-                onClick = { showAddDialog = true },
-                containerColor = if (isVaultActive) AccentGold else AccentBlue,
-                contentColor = if (isVaultActive) DeepNavy else PureWhite,
-                shape = RoundedCornerShape(16.dp),
-                modifier = Modifier.testTag("add_expense_fab")
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Add,
-                    contentDescription = "Add Transaction",
-                    modifier = Modifier.size(26.dp)
-                )
-            }
-        }
     ) { innerPadding ->
         Column(
             modifier = Modifier
@@ -168,55 +152,21 @@ fun PublicExpensesScreen(
                 .padding(innerPadding)
                 .testTag("public_expenses_screen")
         ) {
-            // In Vault mode, show switcher between Transactions and Monthly Savings & Banks
-            if (isVaultActive) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 6.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    FilterChip(
-                        selected = vaultSubTab == 0,
-                        onClick = { vaultSubTab = 0 },
-                        label = { Text("Transactions", fontWeight = FontWeight.Bold) },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = AccentGold,
-                            selectedLabelColor = DeepNavy
-                        ),
-                        modifier = Modifier.weight(1f).testTag("vault_tab_transactions")
-                    )
-                    FilterChip(
-                        selected = vaultSubTab == 1,
-                        onClick = { vaultSubTab = 1 },
-                        label = { Text("Monthly Savings", fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false) },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = AccentGold,
-                            selectedLabelColor = DeepNavy
-                        ),
-                        modifier = Modifier.weight(1f).testTag("vault_tab_savings")
-                    )
-                }
-            }
-
-            if (isVaultActive && vaultSubTab == 1) {
-                SavingsScreen(viewModel = viewModel)
-            } else {
-                // Search Input
-                OutlinedTextField(
-                    value = searchQuery,
-                    onValueChange = { searchQuery = it },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 6.dp)
-                        .testTag("expense_search_field"),
-                    placeholder = { Text("Search by title, category, or notes...") },
-                    leadingIcon = {
-                        Icon(Icons.Default.Search, contentDescription = "Search", tint = MutedSlate)
-                    },
-                    singleLine = true,
-                    shape = RoundedCornerShape(14.dp)
-                )
+            // Search Input
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = { searchQuery = it },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 6.dp)
+                    .testTag("expense_search_field"),
+                placeholder = { Text("Search by title, category, or notes...") },
+                leadingIcon = {
+                    Icon(Icons.Default.Search, contentDescription = "Search", tint = MutedSlate)
+                },
+                singleLine = true,
+                shape = RoundedCornerShape(14.dp)
+            )
 
 
             // Category Filter Chips with Category Icons
@@ -286,19 +236,7 @@ fun PublicExpensesScreen(
                                     color = AccentGreen
                                 )
                             )
-                        } else if (!isVaultActive) {
-                            val pubBudget = currentBudget?.publicBudget?.takeIf { it > 0 } ?: currentBudget?.monthlyBudget ?: 0.0
-                            if (pubBudget > 0) {
-                                val rem = pubBudget - totalExpensesSum
-                                Text(
-                                    text = "Budget Left: ${CurrencyHelper.format(rem, currencySymbol)}",
-                                    style = MaterialTheme.typography.bodySmall.copy(
-                                        fontWeight = FontWeight.Bold,
-                                        color = if (rem >= 0) AccentGreen else AccentRed
-                                    )
-                                )
-                            }
-                        }
+                    }
                         Text(
                             text = "Cost: ${CurrencyHelper.format(totalExpensesSum, currencySymbol)}",
                             style = MaterialTheme.typography.bodySmall.copy(
@@ -358,7 +296,6 @@ fun PublicExpensesScreen(
                         )
                     }
                 }
-            }
             }
         }
     }
@@ -589,7 +526,7 @@ fun TransactionItemCard(
                         style = MaterialTheme.typography.labelSmall.copy(
                             color = AccentBlue,
                             fontWeight = FontWeight.SemiBold,
-                            fontSize = 11.sp
+                            fontSize = 12.sp
                         )
                     )
                 }

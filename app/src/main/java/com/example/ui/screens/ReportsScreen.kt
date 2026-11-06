@@ -106,6 +106,7 @@ fun ReportsScreen(
     val bankAccounts by viewModel.bankAccounts.collectAsState()
     val currency by viewModel.selectedCurrency.collectAsState()
     val currentBudget by viewModel.currentBudget.collectAsState()
+    val userProfileName by viewModel.userProfileName.collectAsState()
     val currencySymbol = currency.symbol
 
     var reportMode by remember { mutableStateOf(0) } // 0: Spending & Incomes, 1: Bank Statements
@@ -127,10 +128,25 @@ fun ReportsScreen(
         }
     }
 
-    // Statement Transactions logic pulled up (Includes transfers for official ledger)
-    val statementTransactions = rawList.filter {
-        if (selectedStatementBank == "All") true
-        else it.paymentMethod.contains(selectedStatementBank, ignoreCase = true)
+    // Statement Transactions logic (filtered by selected bank and selected date period)
+    val statementTransactions = rawList.filter { exp ->
+        val bankMatches = if (selectedStatementBank == "All") {
+            true
+        } else {
+            exp.paymentMethod.contains(selectedStatementBank, ignoreCase = true) ||
+                    selectedStatementBank.contains(exp.paymentMethod, ignoreCase = true)
+        }
+
+        val periodMatches = when (selectedPeriod) {
+            SimpleReportPeriod.THIS_MONTH -> exp.date.startsWith(thisMonthStr)
+            SimpleReportPeriod.CUSTOM_DATE_RANGE -> {
+                val sOk = customStartDate.isBlank() || exp.date >= customStartDate
+                val eOk = customEndDate.isBlank() || exp.date <= customEndDate
+                sOk && eOk
+            }
+        }
+
+        bankMatches && periodMatches
     }.sortedByDescending { it.date }
 
     // Filter by period for Spending Reports (Exclude transfers)
@@ -174,7 +190,7 @@ fun ReportsScreen(
                         )
                         Text(
                             text = if (isVaultActive) "Personal Reports" else "Household Financial Summary",
-                            style = MaterialTheme.typography.labelSmall.copy(color = MutedSlate)
+                            style = MaterialTheme.typography.labelSmall.copy(color = MutedSlate, fontSize = 12.sp)
                         )
                     }
                 },
@@ -187,7 +203,7 @@ fun ReportsScreen(
                                     transactions = statementTransactions,
                                     title = if (selectedStatementBank == "All") "Consolidated Bank Statement" else "$selectedStatementBank Statement",
                                     periodLabel = "Account: $selectedStatementBank",
-                                    userName = user?.displayName ?: "User",
+                                    userName = userProfileName,
                                     userEmail = user?.email ?: "",
                                     currencySymbol = currencySymbol
                                 )
@@ -197,7 +213,7 @@ fun ReportsScreen(
                                     transactions = periodTransactions,
                                     title = "${selectedPeriod.label} Financial Report",
                                     periodLabel = selectedPeriod.label,
-                                    userName = user?.displayName ?: "User",
+                                    userName = userProfileName,
                                     userEmail = user?.email ?: "",
                                     currencySymbol = currencySymbol,
                                     isAggregate = false
@@ -257,38 +273,94 @@ fun ReportsScreen(
             }
 
             if (reportMode == 1) {
-                // Bank Account Selector Chips
+                // Bank Account Selector Chips & Period Filter Chips
                 item {
-                    val allBankNames = remember(bankAccounts) {
-                        listOf("All Accounts") + bankAccounts.map { it.name }
-                    }
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        allBankNames.forEach { bName ->
-                            val isSel = (bName == "All Accounts" && selectedStatementBank == "All") || bName == selectedStatementBank
-                            FilterChip(
-                                selected = isSel,
-                                onClick = {
-                                    selectedStatementBank = if (bName == "All Accounts") "All" else bName
-                                },
-                                label = { Text(bName, fontWeight = if (isSel) FontWeight.Bold else FontWeight.Medium) },
-                                colors = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor = AccentGreen,
-                                    selectedLabelColor = PureWhite
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            text = "Select Account:",
+                            style = MaterialTheme.typography.labelSmall.copy(color = MutedSlate, fontWeight = FontWeight.Bold)
+                        )
+                        val allBankNames = remember(bankAccounts) {
+                            listOf("All Accounts") + bankAccounts.map { it.name }
+                        }
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            allBankNames.forEach { bName ->
+                                val isSel = (bName == "All Accounts" && selectedStatementBank == "All") || bName == selectedStatementBank
+                                FilterChip(
+                                    selected = isSel,
+                                    onClick = {
+                                        selectedStatementBank = if (bName == "All Accounts") "All" else bName
+                                    },
+                                    label = { Text(bName, fontWeight = if (isSel) FontWeight.Bold else FontWeight.Medium) },
+                                    colors = FilterChipDefaults.filterChipColors(
+                                        selectedContainerColor = AccentGreen,
+                                        selectedLabelColor = PureWhite
+                                    )
                                 )
-                            )
+                            }
+                        }
+
+                        Text(
+                            text = "Statement Period Filter:",
+                            style = MaterialTheme.typography.labelSmall.copy(color = MutedSlate, fontWeight = FontWeight.Bold)
+                        )
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            SimpleReportPeriod.values().forEach { period ->
+                                val isSelected = period == selectedPeriod
+                                FilterChip(
+                                    selected = isSelected,
+                                    onClick = { selectedPeriod = period },
+                                    label = { Text(period.label, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium) },
+                                    colors = FilterChipDefaults.filterChipColors(
+                                        selectedContainerColor = AccentBlue,
+                                        selectedLabelColor = PureWhite
+                                    ),
+                                    shape = RoundedCornerShape(20.dp)
+                                )
+                            }
+                        }
+
+                        if (selectedPeriod == SimpleReportPeriod.CUSTOM_DATE_RANGE) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                androidx.compose.material3.OutlinedTextField(
+                                    value = customStartDate,
+                                    onValueChange = { customStartDate = it },
+                                    label = { Text("Start Date (YYYY-MM-DD)", fontSize = 12.sp) },
+                                    modifier = Modifier.weight(1f),
+                                    shape = RoundedCornerShape(10.dp),
+                                    singleLine = true
+                                )
+                                androidx.compose.material3.OutlinedTextField(
+                                    value = customEndDate,
+                                    onValueChange = { customEndDate = it },
+                                    label = { Text("End Date (YYYY-MM-DD)", fontSize = 12.sp) },
+                                    modifier = Modifier.weight(1f),
+                                    shape = RoundedCornerShape(10.dp),
+                                    singleLine = true
+                                )
+                            }
                         }
                     }
                 }
 
                 val totalCredits = statementTransactions.filter { it.isIncome }.sumOf { it.amount }
-                val totalDebits = statementTransactions.filter { it.isExpense }.sumOf { it.amount }
+                val totalDebits = statementTransactions.filter { !it.isIncome }.sumOf { it.amount }
                 val matchingAccount = bankAccounts.find { it.name.equals(selectedStatementBank, ignoreCase = true) }
                 val currentAccBalance = matchingAccount?.balance ?: bankAccounts.sumOf { it.balance }
+                val statementPeriodLabel = if (selectedPeriod == SimpleReportPeriod.THIS_MONTH) "This Month ($thisMonthStr)" else "$customStartDate to $customEndDate"
 
                 // Statement Header Card
                 item {
@@ -312,10 +384,16 @@ fun ReportsScreen(
                                         modifier = Modifier.size(24.dp)
                                     )
                                     Spacer(modifier = Modifier.width(8.dp))
-                                    Text(
-                                        text = if (selectedStatementBank == "All") "Consolidated Statement" else "$selectedStatementBank Statement",
-                                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-                                    )
+                                    Column {
+                                        Text(
+                                            text = if (selectedStatementBank == "All") "Consolidated Statement" else "$selectedStatementBank Statement",
+                                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                                        )
+                                        Text(
+                                            text = "Period: $statementPeriodLabel",
+                                            style = MaterialTheme.typography.labelSmall.copy(color = MutedSlate, fontSize = 12.sp)
+                                        )
+                                    }
                                 }
 
                                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -325,8 +403,8 @@ fun ReportsScreen(
                                                 context = context,
                                                 transactions = statementTransactions,
                                                 title = if (selectedStatementBank == "All") "Consolidated Bank Statement" else "$selectedStatementBank Statement",
-                                                periodLabel = "Account: $selectedStatementBank",
-                                                userName = user?.displayName ?: "User",
+                                                periodLabel = "Account: $selectedStatementBank • Period: $statementPeriodLabel",
+                                                userName = userProfileName,
                                                 userEmail = user?.email ?: "",
                                                 currencySymbol = currencySymbol
                                             )
@@ -375,7 +453,7 @@ fun ReportsScreen(
                                     color = AccentGreen.copy(alpha = 0.1f)
                                 ) {
                                     Column(modifier = Modifier.padding(10.dp)) {
-                                        Text("Total Credits (+)", style = MaterialTheme.typography.labelSmall.copy(color = MutedSlate))
+                                        Text("Total Income / Credits (+)", style = MaterialTheme.typography.labelSmall.copy(color = MutedSlate))
                                         Text(
                                             "+${CurrencyHelper.format(totalCredits, currencySymbol)}",
                                             style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold, color = AccentGreen)
@@ -513,7 +591,7 @@ fun ReportsScreen(
                                         transactions = periodTransactions,
                                         title = "$periodLabelStr Financial Statement Invoice",
                                         periodLabel = periodLabelStr,
-                                        userName = user?.displayName ?: "User",
+                                        userName = userProfileName,
                                         userEmail = user?.email ?: "",
                                         currencySymbol = currencySymbol,
                                         isAggregate = false
@@ -527,86 +605,7 @@ fun ReportsScreen(
 
                         Spacer(modifier = Modifier.height(14.dp))
 
-                        val reportBudget = currentBudget?.publicBudget?.takeIf { it > 0 } ?: currentBudget?.monthlyBudget ?: 0.0
-                        val remBudget = reportBudget - totalSpent
-
-                        if (isVaultActive) {
-                            // Total Income Row (Vault Mode)
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Surface(
-                                        shape = CircleShape,
-                                        color = AccentGreen.copy(alpha = 0.15f),
-                                        modifier = Modifier.size(32.dp)
-                                    ) {
-                                        Box(contentAlignment = Alignment.Center) {
-                                            Icon(
-                                                imageVector = Icons.Default.ArrowDownward,
-                                                contentDescription = null,
-                                                tint = AccentGreen,
-                                                modifier = Modifier.size(16.dp)
-                                            )
-                                        }
-                                    }
-                                    Spacer(modifier = Modifier.width(10.dp))
-                                    Text(
-                                        text = "Total Income",
-                                        style = MaterialTheme.typography.bodyMedium.copy(color = MutedSlate)
-                                    )
-                                }
-                                Text(
-                                    text = "+${CurrencyHelper.format(totalIncome, currencySymbol)}",
-                                    style = MaterialTheme.typography.bodyLarge.copy(
-                                        fontWeight = FontWeight.Bold,
-                                        color = AccentGreen
-                                    )
-                                )
-                            }
-                            Spacer(modifier = Modifier.height(10.dp))
-                        } else if (reportBudget > 0) {
-                            // Monthly Budget Target Row (Public Mode)
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Surface(
-                                        shape = CircleShape,
-                                        color = AccentCyan.copy(alpha = 0.15f),
-                                        modifier = Modifier.size(32.dp)
-                                    ) {
-                                        Box(contentAlignment = Alignment.Center) {
-                                            Icon(
-                                                imageVector = Icons.Default.Savings,
-                                                contentDescription = null,
-                                                tint = AccentCyan,
-                                                modifier = Modifier.size(16.dp)
-                                            )
-                                        }
-                                    }
-                                    Spacer(modifier = Modifier.width(10.dp))
-                                    Text(
-                                        text = "Monthly Budget Target",
-                                        style = MaterialTheme.typography.bodyMedium.copy(color = MutedSlate)
-                                    )
-                                }
-                                Text(
-                                    text = CurrencyHelper.format(reportBudget, currencySymbol),
-                                    style = MaterialTheme.typography.bodyLarge.copy(
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.onSurface
-                                    )
-                                )
-                            }
-                            Spacer(modifier = Modifier.height(10.dp))
-                        }
-
-                        // How Much Was Spent Row
+                        // Only show Total Spent
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
@@ -635,89 +634,13 @@ fun ReportsScreen(
                             }
                             Text(
                                 text = "-${CurrencyHelper.format(totalSpent, currencySymbol)}",
-                                style = MaterialTheme.typography.bodyLarge.copy(
-                                    fontWeight = FontWeight.Bold,
+                                style = MaterialTheme.typography.headlineSmall.copy(
+                                    fontWeight = FontWeight.ExtraBold,
                                     color = MaterialTheme.colorScheme.onSurface
                                 )
                             )
                         }
-
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(1.dp)
-                                .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
-                        )
-                        Spacer(modifier = Modifier.height(12.dp))
-
-                        // Remaining Balance / Budget Remaining Row
-                        val isPositive = if (!isVaultActive && reportBudget > 0) remBudget >= 0 else remainingBalance >= 0
-                        val displayValue = if (!isVaultActive && reportBudget > 0) remBudget else remainingBalance
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    imageVector = Icons.Default.Savings,
-                                    contentDescription = null,
-                                    tint = if (isPositive) AccentGreen else AccentRed,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = if (!isVaultActive && reportBudget > 0) "Budget Remaining" else "Remaining Balance",
-                                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
-                                )
-                            }
-                            Text(
-                                text = CurrencyHelper.format(displayValue, currencySymbol),
-                                style = MaterialTheme.typography.titleLarge.copy(
-                                    fontWeight = FontWeight.ExtraBold,
-                                    color = if (isPositive) AccentGreen else AccentRed
-                                )
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.height(14.dp))
-
-                        // Easy-to-understand Plain English Financial Feedback
-                        Surface(
-                            shape = RoundedCornerShape(12.dp),
-                            color = (if (isPositive) AccentGreen else AccentRed).copy(alpha = 0.12f),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(
-                                    imageVector = if (isPositive) Icons.Default.CheckCircle else Icons.Default.TrendingUp,
-                                    contentDescription = null,
-                                    tint = if (isPositive) AccentGreen else AccentRed,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = when {
-                                        !isVaultActive && reportBudget > 0 && remBudget >= 0 -> "You have ${CurrencyHelper.format(remBudget, currencySymbol)} left to stay within budget."
-                                        !isVaultActive && reportBudget > 0 && remBudget < 0 -> "Over budget limit by ${CurrencyHelper.format(-remBudget, currencySymbol)}."
-                                        remainingBalance > 0 -> "You saved ${CurrencyHelper.format(remainingBalance, currencySymbol)} during ${selectedPeriod.label.lowercase()}."
-                                        remainingBalance == 0.0 && totalSpent > 0 -> "You broke even during this period."
-                                        totalSpent == 0.0 && totalIncome == 0.0 -> "No transactions logged in this period."
-                                        else -> "Total spent for this period: ${CurrencyHelper.format(totalSpent, currencySymbol)}."
-                                    },
-                                    style = MaterialTheme.typography.bodySmall.copy(
-                                        color = if (isPositive) AccentGreen else AccentRed,
-                                        fontWeight = FontWeight.SemiBold
-                                    )
-                                )
-                            }
-                        }
-                }
+                    }
             }
         }
 
@@ -742,7 +665,7 @@ fun ReportsScreen(
                                 )
                                 Text(
                                     text = "Spending broken down by category",
-                                    style = MaterialTheme.typography.bodySmall.copy(color = MutedSlate, fontSize = 11.sp)
+                                    style = MaterialTheme.typography.bodySmall.copy(color = MutedSlate, fontSize = 12.sp)
                                 )
                             }
                             Icon(
@@ -807,7 +730,8 @@ fun ReportsScreen(
                                                 Text(
                                                     text = "($percent%)",
                                                     style = MaterialTheme.typography.labelSmall.copy(
-                                                        color = MutedSlate
+                                                        color = MutedSlate,
+                                                        fontSize = 12.sp
                                                     )
                                                 )
                                             }
@@ -832,90 +756,6 @@ fun ReportsScreen(
                 }
             }
 
-            // 4. Monthly Spending Overview
-            item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(14.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-                ) {
-                    Column(modifier = Modifier.padding(14.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column {
-                                Text(
-                                    text = "Monthly Spending History",
-                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-                                )
-                                Text(
-                                    text = "Total spent per month",
-                                    style = MaterialTheme.typography.bodySmall.copy(color = MutedSlate, fontSize = 11.sp)
-                                )
-                            }
-                            Icon(
-                                imageVector = Icons.Default.Summarize,
-                                contentDescription = null,
-                                tint = AccentBlue,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.height(14.dp))
-
-                        if (monthlyBreakdown.isEmpty()) {
-                            Text(
-                                text = "No monthly spending recorded",
-                                style = MaterialTheme.typography.bodyMedium.copy(color = MutedSlate),
-                                modifier = Modifier.padding(vertical = 12.dp)
-                            )
-                        } else {
-                            val maxMonth = monthlyBreakdown.maxOfOrNull { it.value }?.coerceAtLeast(1.0) ?: 1.0
-
-                            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                                monthlyBreakdown.take(8).forEach { (monthKey, amount) ->
-                                    val fraction = (amount / maxMonth).toFloat().coerceIn(0.04f, 1f)
-                                    val formattedMonth = formatMonthTitle(monthKey)
-
-                                    Column {
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.SpaceBetween
-                                        ) {
-                                            Text(
-                                                text = formattedMonth,
-                                                style = MaterialTheme.typography.bodySmall.copy(
-                                                    fontWeight = FontWeight.Medium
-                                                )
-                                            )
-                                            Text(
-                                                text = CurrencyHelper.format(amount, currencySymbol),
-                                                style = MaterialTheme.typography.bodySmall.copy(
-                                                    fontWeight = FontWeight.Bold,
-                                                    color = MaterialTheme.colorScheme.onSurface
-                                                )
-                                            )
-                                        }
-                                        Spacer(modifier = Modifier.height(4.dp))
-                                        LinearProgressIndicator(
-                                            progress = { fraction },
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .height(6.dp)
-                                                .clip(RoundedCornerShape(3.dp)),
-                                            color = AccentCyan,
-                                            trackColor = MaterialTheme.colorScheme.surfaceVariant
-                                        )
-                                    }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
             }
         }
     }
@@ -959,7 +799,7 @@ fun StatementLedgerItemCard(
                     Text(
                         text = if (isCredit) "CREDIT" else "DEBIT",
                         color = if (isCredit) AccentGreen else AccentRed,
-                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, fontSize = 9.sp),
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, fontSize = 11.sp),
                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                     )
                 }

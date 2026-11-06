@@ -128,6 +128,7 @@ fun DashboardScreen(
     val currentBudget by viewModel.currentBudget.collectAsState()
     val familyMembers by viewModel.familyMembers.collectAsState()
     val familyTransfers by viewModel.familyTransfers.collectAsState()
+    val userProfileName by viewModel.userProfileName.collectAsState()
     val context = androidx.compose.ui.platform.LocalContext.current
 
     val publicList = when (val s = publicState) {
@@ -181,7 +182,7 @@ fun DashboardScreen(
                     )
                     Text(
                         text = if (isVaultActive) "Personal Overview" else "Family & Household Finances",
-                        style = MaterialTheme.typography.bodySmall.copy(color = MutedSlate, fontSize = 11.sp)
+                        style = MaterialTheme.typography.bodySmall.copy(color = MutedSlate, fontSize = 14.sp)
                     )
                 }
 
@@ -210,7 +211,7 @@ fun DashboardScreen(
                                 imageVector = if (isVaultActive) Icons.Default.LockOpen else Icons.Outlined.Lock,
                                 contentDescription = if (isVaultActive) "Lock" else "Unlock",
                                 tint = if (isVaultActive) AccentGold else MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(18.dp)
+                                modifier = Modifier.size(20.dp)
                             )
                         }
                     }
@@ -249,40 +250,6 @@ fun DashboardScreen(
             }
         }
 
-        // Quick Action: Add Transaction
-        item {
-            Button(
-                onClick = onOpenAddTransaction,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 14.dp)
-                    .height(42.dp)
-                    .testTag("quick_add_transaction_button"),
-                shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = if (isVaultActive) AccentGold else AccentBlue
-                )
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Add,
-                    contentDescription = null,
-                    tint = if (isVaultActive) DeepNavy else PureWhite,
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    text = "Add Transaction",
-                    style = MaterialTheme.typography.titleSmall.copy(
-                        color = if (isVaultActive) DeepNavy else PureWhite,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 13.sp
-                    ),
-                    maxLines = 1,
-                    softWrap = false
-                )
-            }
-        }
-
         // 2. DASHBOARD SUMMARY STACKED BAR CHART
         item {
             DashboardSummaryStackedBarChartCard(
@@ -296,8 +263,7 @@ fun DashboardScreen(
         // 3. TOTAL EXPENSES SO FAR CARD
         item {
             TotalExpensesSoFarCard(
-                totalExpenses = summary.totalCost,
-                transactionCount = activeTransactions.count { it.isActualExpense },
+                summary = summary,
                 currencySymbol = currency.symbol
             )
         }
@@ -403,6 +369,7 @@ fun DashboardScreen(
             members = familyMembers,
             allTransfers = familyTransfers,
             currencySymbol = currency.symbol,
+            userProfileName = userProfileName,
             onDismiss = {
                 showStatementDialog = false
                 statementMemberId = null
@@ -496,7 +463,7 @@ fun TopThreeSummaryCards(
                                         style = MaterialTheme.typography.labelSmall.copy(
                                             color = if (remainingBudget >= 0) AccentGreen else AccentRed,
                                             fontWeight = FontWeight.Bold,
-                                            fontSize = 10.sp
+                                            fontSize = 12.sp
                                         ),
                                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
                                     )
@@ -509,7 +476,7 @@ fun TopThreeSummaryCards(
                         if (budget > 0) {
                             Text(
                                 text = if (remainingBudget >= 0) "Remaining to Reach Budget Limit" else "Over Budget Limit By",
-                                style = MaterialTheme.typography.labelSmall.copy(color = SoftWhite.copy(alpha = 0.7f), fontSize = 10.sp)
+                                style = MaterialTheme.typography.labelSmall.copy(color = SoftWhite.copy(alpha = 0.7f), fontSize = 12.sp)
                             )
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
@@ -541,11 +508,11 @@ fun TopThreeSummaryCards(
                             ) {
                                 Text(
                                     text = "Spent: ${CurrencyHelper.format(spentThisMonth, currencySymbol)}",
-                                    style = MaterialTheme.typography.bodySmall.copy(color = SoftWhite.copy(alpha = 0.8f), fontSize = 10.sp)
+                                    style = MaterialTheme.typography.bodySmall.copy(color = SoftWhite.copy(alpha = 0.8f), fontSize = 12.sp)
                                 )
                                 Text(
                                     text = "Target: ${CurrencyHelper.format(budget, currencySymbol)}",
-                                    style = MaterialTheme.typography.bodySmall.copy(color = SoftWhite.copy(alpha = 0.8f), fontSize = 10.sp)
+                                    style = MaterialTheme.typography.bodySmall.copy(color = SoftWhite.copy(alpha = 0.8f), fontSize = 12.sp)
                                 )
                             }
                         } else {
@@ -559,59 +526,7 @@ fun TopThreeSummaryCards(
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
                                 text = "Spent this month: ${CurrencyHelper.format(spentThisMonth, currencySymbol)}",
-                                style = MaterialTheme.typography.bodySmall.copy(color = SoftWhite.copy(alpha = 0.8f), fontSize = 11.sp)
-                            )
-                        }
-                    }
-                }
-            }
-
-            // Total Public Expenses Card (Full width)
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(14.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 14.dp, vertical = 10.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column {
-                        Text(
-                            text = "Total Expenses",
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                color = MutedSlate,
-                                fontWeight = FontWeight.Medium,
-                                fontSize = 11.sp
-                            )
-                        )
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Text(
-                            text = CurrencyHelper.format(summary.totalCost, currencySymbol),
-                            style = MaterialTheme.typography.titleMedium.copy(
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            ),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-
-                    Surface(
-                        shape = CircleShape,
-                        color = AccentRed.copy(alpha = 0.12f),
-                        modifier = Modifier.size(36.dp)
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                imageVector = Icons.Default.ArrowUpward,
-                                contentDescription = null,
-                                tint = AccentRed,
-                                modifier = Modifier.size(18.dp)
+                                style = MaterialTheme.typography.bodySmall.copy(color = SoftWhite.copy(alpha = 0.8f), fontSize = 14.sp)
                             )
                         }
                     }
@@ -644,7 +559,7 @@ fun TopThreeSummaryCards(
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     color = MutedSlate,
                                     fontWeight = FontWeight.Medium,
-                                    fontSize = 11.sp
+                                    fontSize = 14.sp
                                 )
                             )
                             Spacer(modifier = Modifier.height(2.dp))
@@ -696,7 +611,7 @@ fun TopThreeSummaryCards(
                             Column(modifier = Modifier.padding(8.dp)) {
                                 Text(
                                     text = "Public Expense",
-                                    style = MaterialTheme.typography.labelSmall.copy(color = MutedSlate, fontSize = 10.sp)
+                                    style = MaterialTheme.typography.labelSmall.copy(color = MutedSlate, fontSize = 12.sp)
                                 )
                                 Spacer(modifier = Modifier.height(2.dp))
                                 Text(
@@ -718,7 +633,7 @@ fun TopThreeSummaryCards(
                             Column(modifier = Modifier.padding(8.dp)) {
                                 Text(
                                     text = "Private Expense",
-                                    style = MaterialTheme.typography.labelSmall.copy(color = MutedSlate, fontSize = 10.sp)
+                                    style = MaterialTheme.typography.labelSmall.copy(color = MutedSlate, fontSize = 12.sp)
                                 )
                                 Spacer(modifier = Modifier.height(2.dp))
                                 Text(
@@ -839,13 +754,13 @@ fun DashboardSummaryStackedBarChartCard(
             .fillMaxWidth()
             .padding(horizontal = 14.dp)
             .testTag("dashboard_stacked_bar_chart_card"),
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(
             modifier = Modifier
-                .padding(horizontal = 12.dp, vertical = 12.dp)
+                .padding(14.dp)
                 .fillMaxWidth()
         ) {
             // Header Row: Total Cost on left, Legend on right
@@ -856,20 +771,17 @@ fun DashboardSummaryStackedBarChartCard(
             ) {
                 Column {
                     Text(
-                        text = "Total Monthly Cost Graph",
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            fontWeight = FontWeight.Medium,
-                            color = MutedSlate,
-                            fontSize = 11.sp
+                        text = "Monthly Spend",
+                        style = MaterialTheme.typography.titleSmall.copy(
+                            fontWeight = FontWeight.ExtraBold,
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                     )
-                    Spacer(modifier = Modifier.height(2.dp))
                     Text(
-                        text = CurrencyHelper.format(totalCost, currencySymbol),
-                        style = MaterialTheme.typography.titleMedium.copy(
-                            fontWeight = FontWeight.ExtraBold,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            fontSize = 18.sp
+                        text = "Last 6 Months",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            color = MutedSlate,
+                            fontSize = 11.sp
                         )
                     )
                 }
@@ -888,13 +800,13 @@ fun DashboardSummaryStackedBarChartCard(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Horizontally scrollable row of monthly stacked bars (6 months at a time, ending at current month)
+            // Horizontally scrollable row of monthly stacked bars
             LazyRow(
                 state = lazyListState,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(150.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    .height(120.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.Bottom,
                 contentPadding = PaddingValues(horizontal = 4.dp)
             ) {
@@ -905,7 +817,7 @@ fun DashboardSummaryStackedBarChartCard(
                     val isCurrentMonth = (monthKey == currentMonthKey)
 
                     MonthlyStackedBar(
-                        monthLabel = formatMonthLabel(monthKey),
+                        monthLabel = formatMonthShortLabel(monthKey),
                         publicAmount = pubCost,
                         privateAmount = privCost,
                         totalAmount = monthTotal,
@@ -931,12 +843,12 @@ private fun MonthlyStackedBar(
     isVaultActive: Boolean,
     isCurrentMonth: Boolean
 ) {
-    val maxBarHeight = 98.dp
+    val maxBarHeight = 80.dp
 
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Bottom,
-        modifier = Modifier.width(48.dp)
+        modifier = Modifier.width(44.dp)
     ) {
         // Total amount text above the bar
         if (totalAmount > 0) {
@@ -944,23 +856,23 @@ private fun MonthlyStackedBar(
                 text = CurrencyHelper.format(totalAmount, currencySymbol),
                 style = MaterialTheme.typography.labelSmall.copy(
                     fontWeight = FontWeight.Bold,
-                    fontSize = 8.5.sp,
+                    fontSize = 9.sp,
                     color = if (isCurrentMonth) AccentBlue else MaterialTheme.colorScheme.onSurface
                 ),
                 maxLines = 1,
                 overflow = TextOverflow.Clip,
                 textAlign = TextAlign.Center
             )
-            Spacer(modifier = Modifier.height(3.dp))
+            Spacer(modifier = Modifier.height(2.dp))
 
             val rawFraction = (totalAmount / maxAmount).toFloat()
-            val scaledHeight = (maxBarHeight * rawFraction).coerceIn(24.dp, maxBarHeight)
+            val scaledHeight = (maxBarHeight * rawFraction).coerceIn(16.dp, maxBarHeight)
 
             Box(
                 modifier = Modifier
-                    .width(38.dp)
+                    .width(32.dp)
                     .height(scaledHeight)
-                    .clip(RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp))
+                    .clip(RoundedCornerShape(topStart = 6.dp, topEnd = 6.dp))
                     .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
             ) {
                 Column(modifier = Modifier.fillMaxSize()) {
@@ -979,12 +891,15 @@ private fun MonthlyStackedBar(
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     color = Color.White,
                                     fontWeight = FontWeight.Bold,
-                                    fontSize = 9.sp
+                                    fontSize = 8.sp
                                 ),
                                 textAlign = TextAlign.Center,
                                 maxLines = 1,
-                                overflow = TextOverflow.Clip,
-                                modifier = Modifier.padding(horizontal = 1.dp)
+                                overflow = TextOverflow.Visible,
+                                modifier = Modifier
+                                    .rotate(-45f)
+                                    .padding(horizontal = 2.dp)
+                                    .align(Alignment.Center)
                             )
                         }
                     }
@@ -1004,12 +919,15 @@ private fun MonthlyStackedBar(
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     color = Color.White,
                                     fontWeight = FontWeight.Bold,
-                                    fontSize = 9.sp
+                                    fontSize = 8.sp
                                 ),
                                 textAlign = TextAlign.Center,
                                 maxLines = 1,
-                                overflow = TextOverflow.Clip,
-                                modifier = Modifier.padding(horizontal = 1.dp)
+                                overflow = TextOverflow.Visible,
+                                modifier = Modifier
+                                    .rotate(-45f)
+                                    .padding(horizontal = 2.dp)
+                                    .align(Alignment.Center)
                             )
                         }
                     }
@@ -1019,32 +937,26 @@ private fun MonthlyStackedBar(
             // Empty placeholder line for months with zero cost
             Box(
                 modifier = Modifier
-                    .width(22.dp)
+                    .width(18.dp)
                     .height(4.dp)
                     .clip(RoundedCornerShape(2.dp))
                     .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.25f))
             )
         }
 
-        Spacer(modifier = Modifier.height(6.dp))
+        Spacer(modifier = Modifier.height(4.dp))
 
         // Month label below bar
-        Surface(
-            shape = RoundedCornerShape(6.dp),
-            color = if (isCurrentMonth) AccentBlue.copy(alpha = 0.15f) else Color.Transparent
-        ) {
-            Text(
-                text = monthLabel,
-                style = MaterialTheme.typography.labelSmall.copy(
-                    fontWeight = if (isCurrentMonth) FontWeight.ExtraBold else FontWeight.Medium,
-                    color = if (isCurrentMonth) AccentBlue else MutedSlate,
-                    fontSize = 10.5.sp
-                ),
-                maxLines = 1,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
-            )
-        }
+        Text(
+            text = monthLabel,
+            style = MaterialTheme.typography.labelSmall.copy(
+                fontWeight = if (isCurrentMonth) FontWeight.ExtraBold else FontWeight.Medium,
+                color = if (isCurrentMonth) AccentBlue else MutedSlate,
+                fontSize = 11.sp
+            ),
+            maxLines = 1,
+            textAlign = TextAlign.Center
+        )
     }
 }
 
@@ -1060,7 +972,7 @@ private fun LegendItem(color: Color, label: String) {
         Spacer(modifier = Modifier.width(4.dp))
         Text(
             text = label,
-            style = MaterialTheme.typography.labelSmall.copy(color = MutedSlate, fontSize = 10.sp)
+            style = MaterialTheme.typography.labelSmall.copy(color = MutedSlate, fontSize = 12.sp)
         )
     }
 }
@@ -1070,63 +982,122 @@ private fun LegendItem(color: Color, label: String) {
  */
 @Composable
 fun TotalExpensesSoFarCard(
-    totalExpenses: Double,
-    transactionCount: Int,
+    summary: FinancialSummary,
     currencySymbol: String
 ) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 14.dp),
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 12.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+        Column(
+            modifier = Modifier.padding(14.dp)
         ) {
-            Column {
-                Text(
-                    text = "Total Expenses So Far",
-                    style = MaterialTheme.typography.labelSmall.copy(
-                        color = MutedSlate,
-                        fontWeight = FontWeight.Medium,
-                        fontSize = 11.sp
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text(
+                        text = "Total So Far",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            color = MutedSlate,
+                            fontWeight = FontWeight.Medium,
+                            fontSize = 12.sp
+                        )
                     )
-                )
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = CurrencyHelper.format(totalExpenses, currencySymbol),
-                    style = MaterialTheme.typography.titleMedium.copy(
-                        fontWeight = FontWeight.ExtraBold,
-                        color = MaterialTheme.colorScheme.onSurface
+                    Text(
+                        text = CurrencyHelper.format(summary.totalCost, currencySymbol),
+                        style = MaterialTheme.typography.titleLarge.copy(
+                            fontWeight = FontWeight.ExtraBold,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            fontSize = 22.sp
+                        )
                     )
-                )
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = "$transactionCount transactions recorded",
-                    style = MaterialTheme.typography.bodySmall.copy(
-                        color = MutedSlate,
-                        fontSize = 10.sp
+                }
+
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = AccentBlue.copy(alpha = 0.1f)
+                ) {
+                    Text(
+                        text = "Expense Summary",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            color = AccentBlue,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 11.sp
+                        ),
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                     )
-                )
+                }
             }
 
-            Surface(
-                shape = RoundedCornerShape(12.dp),
-                color = AccentRed.copy(alpha = 0.12f),
-                modifier = Modifier.size(38.dp)
+            Spacer(modifier = Modifier.height(12.dp))
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(1.dp)
+                    .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.05f))
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Second Line: This Year and This Month in 2-column layout
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = Icons.Default.ReceiptLong,
-                        contentDescription = null,
-                        tint = AccentRed,
-                        modifier = Modifier.size(20.dp)
+                // This Year Cost
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "This Year",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            color = MutedSlate,
+                            fontWeight = FontWeight.Medium,
+                            fontSize = 11.sp
+                        )
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = CurrencyHelper.format(summary.currentYearCost, currencySymbol),
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            fontWeight = FontWeight.Bold,
+                            color = AccentBlue,
+                            fontSize = 16.sp
+                        )
+                    )
+                }
+
+                // Vertical Divider
+                Box(
+                    modifier = Modifier
+                        .width(1.dp)
+                        .height(32.dp)
+                        .align(Alignment.CenterVertically)
+                        .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.1f))
+                )
+
+                // This Month Cost
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "This Month",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            color = MutedSlate,
+                            fontWeight = FontWeight.Medium,
+                            fontSize = 11.sp
+                        )
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = CurrencyHelper.format(summary.currentMonthCost, currencySymbol),
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            fontWeight = FontWeight.Bold,
+                            color = AccentRed,
+                            fontSize = 16.sp
+                        )
                     )
                 }
             }
@@ -1164,7 +1135,7 @@ fun TopExpenseCategoriesCard(
                     )
                     Text(
                         text = "Top 5 spending areas",
-                        style = MaterialTheme.typography.bodySmall.copy(color = MutedSlate, fontSize = 10.sp)
+                        style = MaterialTheme.typography.bodySmall.copy(color = MutedSlate, fontSize = 12.sp)
                     )
                 }
                 Surface(
@@ -1241,7 +1212,7 @@ fun TopExpenseCategoriesCard(
                                         style = MaterialTheme.typography.labelSmall.copy(
                                             color = MutedSlate,
                                             fontWeight = FontWeight.Medium,
-                                            fontSize = 9.sp
+                                            fontSize = 11.sp
                                         )
                                     )
                                 }
@@ -1316,7 +1287,7 @@ fun DashboardTransactionRow(
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
                         text = "${expense.category} • ${expense.date}",
-                        style = MaterialTheme.typography.bodySmall.copy(color = MutedSlate, fontSize = 11.sp)
+                        style = MaterialTheme.typography.bodySmall.copy(color = MutedSlate, fontSize = 13.sp)
                     )
                 }
             }
@@ -1334,7 +1305,7 @@ fun DashboardTransactionRow(
                     style = MaterialTheme.typography.labelSmall.copy(
                         color = AccentBlue,
                         fontWeight = FontWeight.SemiBold,
-                        fontSize = 10.sp
+                        fontSize = 12.sp
                     )
                 )
             }
@@ -1392,7 +1363,7 @@ fun VaultSavingsOverviewCard(
                         )
                         Text(
                             text = "Combined savings across bank accounts",
-                            style = MaterialTheme.typography.bodySmall.copy(color = MutedSlate, fontSize = 10.sp),
+                            style = MaterialTheme.typography.bodySmall.copy(color = MutedSlate, fontSize = 12.sp),
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
@@ -1414,7 +1385,7 @@ fun VaultSavingsOverviewCard(
                 verticalAlignment = Alignment.Bottom
             ) {
                 Column {
-                    Text("Total Saved Balance", style = MaterialTheme.typography.labelSmall.copy(color = MutedSlate, fontSize = 10.sp))
+                    Text("Total Saved Balance", style = MaterialTheme.typography.labelSmall.copy(color = MutedSlate, fontSize = 12.sp))
                     Text(
                         CurrencyHelper.format(totalSavings, currencySymbol),
                         style = MaterialTheme.typography.titleMedium.copy(
@@ -1431,7 +1402,7 @@ fun VaultSavingsOverviewCard(
                     Text(
                         "${bankAccounts.size} Accounts",
                         color = AccentGreen,
-                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, fontSize = 10.sp),
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, fontSize = 12.sp),
                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                     )
                 }
@@ -1458,13 +1429,13 @@ fun VaultSavingsOverviewCard(
                             ) {
                                 Text(
                                     text = "${acc.name}: ",
-                                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium, fontSize = 11.sp)
+                                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium, fontSize = 13.sp)
                                 )
                                 Text(
                                     text = CurrencyHelper.format(acc.balance, currencySymbol),
                                     style = MaterialTheme.typography.bodySmall.copy(
                                         fontWeight = FontWeight.Bold,
-                                        fontSize = 11.sp,
+                                        fontSize = 13.sp,
                                         color = if (acc.balance >= 0) AccentGreen else AccentRed
                                     )
                                 )

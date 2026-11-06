@@ -198,17 +198,6 @@ fun PrivateExpensesScreen(
                 )
             )
         },
-        floatingActionButton = {
-            FloatingActionButton(
-                onClick = { showAddDialog = true },
-                containerColor = AccentGold,
-                contentColor = DeepNavy,
-                shape = RoundedCornerShape(16.dp),
-                modifier = Modifier.testTag("add_private_expense_fab")
-            ) {
-                Icon(Icons.Default.Add, contentDescription = "Add Private Expense")
-            }
-        }
     ) { innerPadding ->
         Column(
             modifier = Modifier

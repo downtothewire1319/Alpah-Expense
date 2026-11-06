@@ -19,11 +19,14 @@ import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.snapshots
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import java.util.UUID
 
@@ -35,7 +38,18 @@ class ExpenseRepository(private val db: FirebaseFirestore) {
         )
     )
 
+    init {
+        runCatching {
+            val settings = com.google.firebase.firestore.FirebaseFirestoreSettings.Builder()
+                .setLocalCacheSettings(com.google.firebase.firestore.PersistentCacheSettings.newBuilder().build())
+                .build()
+            db.firestoreSettings = settings
+        }
+    }
+
     private val auth = Firebase.auth
+
+    fun getCurrentUser(): FirebaseUser? = auth.currentUser
 
     private fun requireUserId(): String {
         return auth.currentUser?.uid
@@ -404,8 +418,10 @@ class ExpenseRepository(private val db: FirebaseFirestore) {
     }
 
     fun observeBankAccounts(): Flow<List<BankAccount>> = flow {
-        val uid = requireUserId()
-        runCatching { seedDefaultBankAccountsIfEmpty(uid) }
+        val uid = auth.currentUser?.uid ?: run {
+            emit(ExpenseCategories.defaultBankAccounts)
+            return@flow
+        }
         val path = "users/$uid/bank_accounts"
         val accountsFlow = db.collection("users").document(uid).collection("bank_accounts")
             .snapshots()
@@ -416,6 +432,11 @@ class ExpenseRepository(private val db: FirebaseFirestore) {
                     }
                 }
                 if (list.isEmpty()) {
+                    if (!snapshot.metadata.isFromCache && !snapshot.metadata.hasPendingWrites()) {
+                        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                            runCatching { seedDefaultBankAccountsIfEmpty(uid) }
+                        }
+                    }
                     ExpenseCategories.defaultBankAccounts
                 } else {
                     list
@@ -579,8 +600,10 @@ class ExpenseRepository(private val db: FirebaseFirestore) {
     }
 
     fun observeFamilyMembers(): Flow<List<FamilyMember>> = flow {
-        val uid = requireUserId()
-        runCatching { seedDefaultFamilyMembersIfEmpty(uid) }
+        val uid = auth.currentUser?.uid ?: run {
+            emit(ExpenseCategories.defaultFamilyMembers)
+            return@flow
+        }
         val path = "users/$uid/family_members"
         val membersFlow = db.collection("users").document(uid).collection("family_members")
             .snapshots()
@@ -591,6 +614,11 @@ class ExpenseRepository(private val db: FirebaseFirestore) {
                     }
                 }
                 if (list.isEmpty()) {
+                    if (!snapshot.metadata.isFromCache && !snapshot.metadata.hasPendingWrites()) {
+                        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                            runCatching { seedDefaultFamilyMembersIfEmpty(uid) }
+                        }
+                    }
                     ExpenseCategories.defaultFamilyMembers
                 } else {
                     list

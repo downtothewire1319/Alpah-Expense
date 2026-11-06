@@ -92,12 +92,14 @@ import com.google.firebase.auth.auth
 @Composable
 fun SavingsScreen(
     viewModel: ExpenseViewModel,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    showInlineHistory: Boolean = false
 ) {
     val context = LocalContext.current
     val user = Firebase.auth.currentUser
     val bankAccounts by viewModel.bankAccounts.collectAsState()
     val currency by viewModel.selectedCurrency.collectAsState()
+    val userProfileName by viewModel.userProfileName.collectAsState()
     val currencySymbol = currency.symbol
 
     val privateList by viewModel.privateExpenses.collectAsState()
@@ -126,162 +128,161 @@ fun SavingsScreen(
         publicList
     }
 
-    val bankHistoryList = allTransactions.filter { exp ->
-        val bankMatches = if (selectedHistoryBank == "All Accounts") {
-            true
-        } else {
-            exp.paymentMethod.contains(selectedHistoryBank, ignoreCase = true) ||
-                    selectedHistoryBank.contains(exp.paymentMethod, ignoreCase = true)
-        }
-        
-        val typeMatches = when (selectedHistoryType) {
-            "Deposits" -> exp.isActualIncome
-            "Withdrawals" -> exp.isActualExpense
-            "Transfers" -> exp.isTransfer
-            else -> true
-        }
-        bankMatches && typeMatches
-    }.sortedByDescending { it.date }
+    val bankHistoryList = remember(allTransactions, selectedHistoryBank, selectedHistoryType) {
+        allTransactions.filter { exp ->
+            val bankMatches = if (selectedHistoryBank == "All Accounts") {
+                true
+            } else {
+                exp.paymentMethod.contains(selectedHistoryBank, ignoreCase = true) ||
+                        selectedHistoryBank.contains(exp.paymentMethod, ignoreCase = true)
+            }
+            
+            val typeMatches = when (selectedHistoryType) {
+                "Deposits" -> exp.isActualIncome
+                "Withdrawals" -> exp.isActualExpense
+                "Transfers" -> exp.isTransfer
+                else -> true
+            }
+            bankMatches && typeMatches
+        }.sortedByDescending { it.date }
+    }
 
-    LazyColumn(
+    Column(
         modifier = modifier
-            .fillMaxSize()
+            .fillMaxWidth()
             .testTag("savings_screen"),
-        contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 88.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         // Hero Savings Card
-        item {
-            Card(
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("total_savings_hero_card"),
+            shape = RoundedCornerShape(24.dp),
+            colors = CardDefaults.cardColors(containerColor = Color.Transparent)
+        ) {
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .testTag("total_savings_hero_card"),
-                shape = RoundedCornerShape(24.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.Transparent)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(
-                            Brush.linearGradient(
-                                colors = listOf(
-                                    DeepNavy,
-                                    Color(0xFF0D274D),
-                                    Color(0xFF143B66)
-                                )
+                    .background(
+                        Brush.linearGradient(
+                            colors = listOf(
+                                DeepNavy,
+                                Color(0xFF0D274D),
+                                Color(0xFF143B66)
                             )
                         )
-                        .padding(22.dp)
-                ) {
-                    Column {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Surface(
-                                    shape = CircleShape,
-                                    color = AccentGold.copy(alpha = 0.2f),
-                                    modifier = Modifier.size(36.dp)
-                                ) {
-                                    Box(contentAlignment = Alignment.Center) {
-                                        Icon(
-                                            imageVector = Icons.Default.Savings,
-                                            contentDescription = null,
-                                            tint = AccentGold,
-                                            modifier = Modifier.size(20.dp)
-                                        )
-                                    }
-                                }
-                                Spacer(modifier = Modifier.width(10.dp))
-                                Text(
-                                    text = "Total Monthly Savings",
-                                    style = MaterialTheme.typography.titleMedium.copy(
-                                        color = PureWhite.copy(alpha = 0.85f),
-                                        fontWeight = FontWeight.SemiBold
-                                    )
-                                )
-                            }
-
+                    )
+                    .padding(22.dp)
+            ) {
+                Column {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
                             Surface(
-                                shape = RoundedCornerShape(8.dp),
-                                color = AccentGreen.copy(alpha = 0.2f)
+                                shape = CircleShape,
+                                color = AccentGold.copy(alpha = 0.2f),
+                                modifier = Modifier.size(36.dp)
                             ) {
-                                Text(
-                                    text = "${bankAccounts.size} Accounts",
-                                    color = AccentGreen,
-                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                                )
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.Default.Savings,
+                                        contentDescription = null,
+                                        tint = AccentGold,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
                             }
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Text(
+                                text = "Total Monthly Savings",
+                                style = MaterialTheme.typography.titleMedium.copy(
+                                    color = PureWhite.copy(alpha = 0.85f),
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            )
                         }
 
-                        Spacer(modifier = Modifier.height(16.dp))
-
-                        Text(
-                            text = CurrencyHelper.format(totalSavings, currencySymbol),
-                            style = MaterialTheme.typography.headlineLarge.copy(
-                                fontWeight = FontWeight.ExtraBold,
-                                color = PureWhite,
-                                fontSize = 32.sp
-                            )
-                        )
-
-                        Text(
-                            text = "Secured across Janata, Meghna, DBBL, bKash & Cash",
-                            style = MaterialTheme.typography.bodySmall.copy(
-                                color = PureWhite.copy(alpha = 0.65f)
-                            )
-                        )
-
-                        Spacer(modifier = Modifier.height(18.dp))
-
-                        // Action Buttons: Quick Deposit, Transfer, Add Account
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = AccentGreen.copy(alpha = 0.2f)
                         ) {
-                            Button(
-                                onClick = {
-                                    targetDepositBank = null
-                                    showDepositDialog = true
-                                },
-                                shape = RoundedCornerShape(12.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = AccentGreen),
-                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp),
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .testTag("quick_deposit_button")
-                            ) {
-                                Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(14.dp))
-                                Spacer(modifier = Modifier.width(2.dp))
-                                Text("Deposit", fontWeight = FontWeight.Bold, fontSize = 11.sp, maxLines = 1, softWrap = false)
-                            }
+                            Text(
+                                text = "${bankAccounts.size} Accounts",
+                                color = AccentGreen,
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
+                        }
+                    }
 
-                            Button(
-                                onClick = { showTransferDialog = true },
-                                shape = RoundedCornerShape(12.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = AccentBlue),
-                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp),
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .testTag("transfer_banks_button")
-                            ) {
-                                Icon(Icons.Default.SwapHoriz, contentDescription = null, modifier = Modifier.size(14.dp))
-                                Spacer(modifier = Modifier.width(2.dp))
-                                Text("Transfer", fontWeight = FontWeight.Bold, fontSize = 11.sp, maxLines = 1, softWrap = false)
-                            }
+                    Spacer(modifier = Modifier.height(16.dp))
 
-                            OutlinedButton(
-                                onClick = { showAddAccountDialog = true },
-                                shape = RoundedCornerShape(12.dp),
-                                colors = ButtonDefaults.outlinedButtonColors(contentColor = PureWhite),
-                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp),
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Text("+ New", fontWeight = FontWeight.Bold, fontSize = 11.sp, maxLines = 1, softWrap = false)
-                            }
+                    Text(
+                        text = CurrencyHelper.format(totalSavings, currencySymbol),
+                        style = MaterialTheme.typography.headlineLarge.copy(
+                            fontWeight = FontWeight.ExtraBold,
+                            color = PureWhite,
+                            fontSize = 32.sp
+                        )
+                    )
+
+                    Text(
+                        text = "Secured across Janata, Meghna, DBBL, bKash & Cash",
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            color = PureWhite.copy(alpha = 0.65f)
+                        )
+                    )
+
+                    Spacer(modifier = Modifier.height(18.dp))
+
+                    // Action Buttons: Quick Deposit, Transfer, Add Account
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Button(
+                            onClick = {
+                                targetDepositBank = null
+                                showDepositDialog = true
+                            },
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = AccentGreen),
+                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp),
+                            modifier = Modifier
+                                .weight(1f)
+                                .testTag("quick_deposit_button")
+                        ) {
+                            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(14.dp))
+                            Spacer(modifier = Modifier.width(2.dp))
+                            Text("Deposit", fontWeight = FontWeight.Bold, fontSize = 12.sp, maxLines = 1, softWrap = false)
+                        }
+
+                        Button(
+                            onClick = { showTransferDialog = true },
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = AccentBlue),
+                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp),
+                            modifier = Modifier
+                                .weight(1f)
+                                .testTag("transfer_banks_button")
+                        ) {
+                            Icon(Icons.Default.SwapHoriz, contentDescription = null, modifier = Modifier.size(14.dp))
+                            Spacer(modifier = Modifier.width(2.dp))
+                            Text("Transfer", fontWeight = FontWeight.Bold, fontSize = 12.sp, maxLines = 1, softWrap = false)
+                        }
+
+                        OutlinedButton(
+                            onClick = { showAddAccountDialog = true },
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = PureWhite),
+                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("+ New", fontWeight = FontWeight.Bold, fontSize = 12.sp, maxLines = 1, softWrap = false)
                         }
                     }
                 }
@@ -289,25 +290,41 @@ fun SavingsScreen(
         }
 
         // Section Title: My Bank Balances
-        item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Bank & Wallet Balances",
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+            )
+
+            Button(
+                onClick = {
+                    FinancialInvoiceHelper.printInvoice(
+                        context = context,
+                        transactions = allTransactions,
+                        title = "Bank Savings Statement",
+                        periodLabel = "All Accounts Statement",
+                        userName = userProfileName,
+                        userEmail = user?.email ?: "",
+                        currencySymbol = currencySymbol
+                    )
+                },
+                shape = RoundedCornerShape(10.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = AccentBlue),
+                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                modifier = Modifier.testTag("print_bank_statement_button")
             ) {
-                Text(
-                    text = "Bank & Wallet Balances",
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-                )
-                Text(
-                    text = "Tap ✏️ to adjust balance",
-                    style = MaterialTheme.typography.labelSmall.copy(color = MutedSlate)
-                )
+                Icon(Icons.Default.Print, contentDescription = null, modifier = Modifier.size(14.dp))
+                Spacer(modifier = Modifier.width(4.dp))
+                Text("Statement", fontSize = 12.sp, fontWeight = FontWeight.Bold)
             }
         }
 
         // Bank Account Cards
-        items(bankAccounts, key = { it.id }) { account ->
+        bankAccounts.forEach { account ->
             BankAccountCard(
                 account = account,
                 currencySymbol = currencySymbol,
@@ -320,8 +337,8 @@ fun SavingsScreen(
             )
         }
 
-        // Section Title: History of Deposits & Withdrawals
-        item {
+        if (showInlineHistory) {
+            // Section Title: History of Deposits & Withdrawals
             Spacer(modifier = Modifier.height(8.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -349,7 +366,7 @@ fun SavingsScreen(
                             transactions = bankHistoryList,
                             title = "Bank Savings Statement",
                             periodLabel = "Account: $selectedHistoryBank",
-                            userName = user?.displayName ?: "User",
+                            userName = userProfileName,
                             userEmail = user?.email ?: "",
                             currencySymbol = currencySymbol
                         )
@@ -361,13 +378,11 @@ fun SavingsScreen(
                 ) {
                     Icon(Icons.Default.Print, contentDescription = null, modifier = Modifier.size(14.dp))
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("Print Statement", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    Text("Print Statement", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                 }
             }
-        }
 
-        // Account Filter Chips for History
-        item {
+            // Account Filter Chips for History
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 val historyFilterBanks = remember(bankAccounts) {
                     listOf("All Accounts") + bankAccounts.map { it.name }
@@ -414,11 +429,9 @@ fun SavingsScreen(
                     }
                 }
             }
-        }
 
-        // History List Items
-        if (bankHistoryList.isEmpty()) {
-            item {
+            // History List Items
+            if (bankHistoryList.isEmpty()) {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(16.dp),
@@ -430,13 +443,13 @@ fun SavingsScreen(
                         modifier = Modifier.padding(20.dp)
                     )
                 }
-            }
-        } else {
-            items(bankHistoryList, key = { it.id }) { expense ->
-                SavingsHistoryItemCard(
-                    expense = expense,
-                    currencySymbol = currencySymbol
-                )
+            } else {
+                bankHistoryList.forEach { expense ->
+                    SavingsHistoryItemCard(
+                        expense = expense,
+                        currencySymbol = currencySymbol
+                    )
+                }
             }
         }
     }
@@ -705,7 +718,7 @@ fun SavingsHistoryItemCard(
                             style = MaterialTheme.typography.labelSmall.copy(
                                 fontWeight = FontWeight.SemiBold,
                                 color = AccentBlue,
-                                fontSize = 10.sp
+                                fontSize = 12.sp
                             ),
                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                         )
@@ -730,7 +743,7 @@ fun SavingsHistoryItemCard(
                         style = MaterialTheme.typography.labelSmall.copy(
                             fontWeight = FontWeight.Bold,
                             color = tint,
-                            fontSize = 9.sp
+                            fontSize = 11.sp
                         ),
                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                     )
