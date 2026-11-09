@@ -299,9 +299,17 @@ object FinancialInvoiceHelper {
                 </table>
 
                 <div class="summary-cards">
-                    <div class="summary-card" style="border-right: none;">
+                    <div class="summary-card">
+                        <div class="summary-label">Total Income</div>
+                        <div class="summary-value" style="color:#2e7d32;">$currencySymbol ${String.format(Locale.US, "%,.2f", totalIncome)}</div>
+                    </div>
+                    <div class="summary-card">
                         <div class="summary-label">Total Expenses</div>
-                        <div class="summary-value" style="color:#c62828; font-size: 24px;">$currencySymbol ${String.format(Locale.US, "%,.2f", totalSpent)}</div>
+                        <div class="summary-value" style="color:#c62828;">$currencySymbol ${String.format(Locale.US, "%,.2f", totalSpent)}</div>
+                    </div>
+                    <div class="summary-card">
+                        <div class="summary-label">Net Balance</div>
+                        <div class="summary-value" style="color:#1a202c;">$currencySymbol ${String.format(Locale.US, "%,.2f", netBalance)}</div>
                     </div>
                 </div>
 

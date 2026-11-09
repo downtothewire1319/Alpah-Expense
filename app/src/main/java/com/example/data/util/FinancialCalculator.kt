@@ -23,23 +23,17 @@ object FinancialCalculator {
     }
 
     /**
-     * Checks if an expense item is a genuine income transaction (and not a transfer).
+     * Checks if an expense item is a genuine income transaction (and not an internal transfer).
      */
     fun isActualIncome(expense: Expense): Boolean {
-        if (isTransferTransaction(expense)) return false
-        return expense.isActualIncome ||
-                expense.transactionType.equals("income", ignoreCase = true) ||
-                expense.category.contains("Income", ignoreCase = true) ||
-                expense.category.contains("Salary", ignoreCase = true)
+        return expense.isActualIncome
     }
 
     /**
-     * Checks if an expense item is a genuine expense transaction (and not a transfer or income).
+     * Checks if an expense item is a genuine expense transaction (and not an internal transfer or income).
      */
     fun isActualExpense(expense: Expense): Boolean {
-        if (isTransferTransaction(expense)) return false
-        if (isActualIncome(expense)) return false
-        return true
+        return expense.isActualExpense
     }
 
     /**

@@ -69,7 +69,10 @@ data class FinancialSummary(
     val combinedMonthlyTrend: Map<String, Double> = emptyMap(),
     val combinedMonthlySavingsTrend: Map<String, Double> = emptyMap(),
     val monthlySavingsBreakdowns: Map<String, MonthlySavingsBreakdown> = emptyMap(),
-    val currentYearCost: Double = 0.0
+    val currentYearCost: Double = 0.0,
+    val publicIncomeMonthlyTrend: Map<String, Double> = emptyMap(),
+    val privateIncomeMonthlyTrend: Map<String, Double> = emptyMap(),
+    val combinedIncomeMonthlyTrend: Map<String, Double> = emptyMap()
 ) {
     val totalPublic: Double get() = totalPublicCost
     val totalPrivate: Double get() = totalPrivateCost
@@ -579,7 +582,12 @@ class ExpenseViewModel(
 
     fun saveBankAccount(account: BankAccount, onDone: (Boolean) -> Unit = {}) {
         viewModelScope.launch {
-            val res = repository.saveBankAccount(account)
+            val oldAccount = bankAccounts.value.find { it.id == account.id }
+            val res = if (oldAccount != null && oldAccount.name != account.name) {
+                repository.renameBankAccount(account.id, oldAccount.name, account.name)
+            } else {
+                repository.saveBankAccount(account)
+            }
             if (res.isSuccess) {
                 autoBackup()
                 _statusMessage.value = "Bank account updated"
@@ -1037,6 +1045,7 @@ class ExpenseViewModel(
             .mapValues { entry -> entry.value.sumOf { it.amount } }
 
         val publicTrend = buildMonthlyTrend(actualPublicCostList)
+        val publicIncomeTrend = buildMonthlyTrend(actualPublicIncomeList)
 
         val savingsBreakdowns = buildSavingsBreakdowns(
             actualPublicIncomeList,
@@ -1065,6 +1074,8 @@ class ExpenseViewModel(
                 combinedCurrentMonthCost = currentMonthPubCost,
                 publicCategoryTotals = publicCatTotals,
                 publicMonthlyTrend = publicTrend,
+                publicIncomeMonthlyTrend = publicIncomeTrend,
+                combinedIncomeMonthlyTrend = publicIncomeTrend,
                 combinedMonthlySavingsTrend = combinedSavingsTrend,
                 monthlySavingsBreakdowns = savingsBreakdowns,
                 currentYearCost = actualPublicCostList.filter { it.date.startsWith(currentYear) }.sumOf { it.amount }
@@ -1083,6 +1094,7 @@ class ExpenseViewModel(
             .mapValues { entry -> entry.value.sumOf { it.amount } }
 
         val privateTrend = buildMonthlyTrend(actualPrivateCostList)
+        val privateIncomeTrend = buildMonthlyTrend(actualPrivateIncomeList)
 
         val combinedIncomeList = actualPublicIncomeList + actualPrivateIncomeList
         val combinedCostList = actualPublicCostList + actualPrivateCostList
@@ -1099,6 +1111,7 @@ class ExpenseViewModel(
             .mapValues { entry -> entry.value.sumOf { it.amount } }
 
         val combinedTrend = buildMonthlyTrend(combinedCostList)
+        val combinedIncomeTrend = buildMonthlyTrend(combinedIncomeList)
 
         val currentYearCost = combinedCostList.filter { it.date.startsWith(currentYear) }.sumOf { it.amount }
 
@@ -1124,6 +1137,9 @@ class ExpenseViewModel(
             publicMonthlyTrend = publicTrend,
             privateMonthlyTrend = privateTrend,
             combinedMonthlyTrend = combinedTrend,
+            publicIncomeMonthlyTrend = publicIncomeTrend,
+            privateIncomeMonthlyTrend = privateIncomeTrend,
+            combinedIncomeMonthlyTrend = combinedIncomeTrend,
             combinedMonthlySavingsTrend = combinedSavingsTrend,
             monthlySavingsBreakdowns = savingsBreakdowns,
             currentYearCost = currentYearCost

@@ -567,6 +567,38 @@ class ExpenseRepository(private val db: FirebaseFirestore) {
         Unit
     }
 
+    suspend fun renameBankAccount(accountId: String, oldName: String, newName: String): Result<Unit> = runCatching {
+        val uid = requireUserId()
+        val batch = db.batch()
+        
+        // 1. Update Bank Account document
+        val accountRef = db.collection("users").document(uid).collection("bank_accounts").document(accountId)
+        batch.update(accountRef, mapOf(
+            "name" to newName.trim(),
+            "updatedAt" to FieldValue.serverTimestamp()
+        ))
+        
+        // 2. Update all public expenses with this payment method
+        val publicExps = db.collection("public_expenses")
+            .whereEqualTo("userId", uid)
+            .whereEqualTo("paymentMethod", oldName)
+            .get().await()
+        for (doc in publicExps.documents) {
+            batch.update(doc.reference, "paymentMethod", newName.trim())
+        }
+        
+        // 3. Update all private expenses with this payment method
+        val privateExps = db.collection("users").document(uid).collection("private_expenses")
+            .whereEqualTo("paymentMethod", oldName)
+            .get().await()
+        for (doc in privateExps.documents) {
+            batch.update(doc.reference, "paymentMethod", newName.trim())
+        }
+        
+        batch.commit().await()
+        Unit
+    }
+
     suspend fun deleteBankAccount(accountId: String): Result<Unit> = runCatching {
         val uid = requireUserId()
         db.collection("users").document(uid).collection("bank_accounts").document(accountId).delete().await()

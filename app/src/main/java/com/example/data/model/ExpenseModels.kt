@@ -60,16 +60,22 @@ data class Expense(
     val isTransfer: Boolean
         get() = transactionType.equals("transfer", ignoreCase = true) || category.equals("Savings Transfer", ignoreCase = true)
 
-    // Helper to identify if it's a REAL income (not a transfer)
+    // Helper to identify if it's a REAL income (not an internal transfer)
     val isActualIncome: Boolean
         get() = (transactionType.equals("income", ignoreCase = true) || 
                  category.contains("Income", ignoreCase = true) || 
                  category.contains("Salary", ignoreCase = true) ||
-                 ExpenseCategories.incomeCategories.any { it.equals(category, ignoreCase = true) }) && !isTransfer
+                 ExpenseCategories.incomeCategories.any { it.equals(category, ignoreCase = true) } ||
+                 (transactionType.equals("transfer", ignoreCase = true) && (title.contains("Received", ignoreCase = true) || notes?.contains("Received", ignoreCase = true) == true || title.contains("from", ignoreCase = true)))) && 
+                 !category.equals("Savings Transfer", ignoreCase = true)
 
-    // Helper to identify if it's a REAL expense (not a transfer)
+    // Helper to identify if it's a REAL expense (not an internal transfer)
     val isActualExpense: Boolean
-        get() = !isActualIncome && !isTransfer
+        get() = (transactionType.equals("expense", ignoreCase = true) || 
+                 (!isIncome && !isTransfer) ||
+                 (transactionType.equals("transfer", ignoreCase = true) && (title.contains("Sent", ignoreCase = true) || title.contains("to", ignoreCase = true)))) && 
+                 !category.equals("Savings Transfer", ignoreCase = true) &&
+                 !isActualIncome
 }
 
 @IgnoreExtraProperties

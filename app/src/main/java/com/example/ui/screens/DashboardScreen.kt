@@ -403,131 +403,57 @@ fun TopThreeSummaryCards(
     isVaultActive: Boolean = false
 ) {
     if (!isVaultActive) {
-        val budget = currentBudget?.publicBudget?.takeIf { it > 0 } ?: currentBudget?.monthlyBudget ?: 0.0
-        val spentThisMonth = summary.currentMonthPublicCost
-        val remainingBudget = budget - spentThisMonth
-
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 14.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            // Budget Reminder Hero Card
+            // Public Total Summary Card (Replaces Budget card)
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(14.dp),
-                colors = CardDefaults.cardColors(containerColor = DeepNavy),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
             ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(
-                            Brush.horizontalGradient(
-                                listOf(DeepNavy, LightNavy)
-                            )
-                        )
-                        .padding(12.dp)
-                ) {
-                    Column {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    imageVector = Icons.Default.Savings,
-                                    contentDescription = null,
-                                    tint = AccentCyan,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    text = "Monthly Budget Target",
-                                    style = MaterialTheme.typography.labelSmall.copy(
-                                        color = SoftWhite.copy(alpha = 0.85f),
-                                        fontWeight = FontWeight.Medium
-                                    )
-                                )
-                            }
-
-                            if (budget > 0) {
-                                Surface(
-                                    shape = RoundedCornerShape(8.dp),
-                                    color = if (remainingBudget >= 0) AccentGreen.copy(alpha = 0.2f) else AccentRed.copy(alpha = 0.2f)
-                                ) {
-                                    Text(
-                                        text = if (remainingBudget >= 0) "Within Limit" else "Over Limit",
-                                        style = MaterialTheme.typography.labelSmall.copy(
-                                            color = if (remainingBudget >= 0) AccentGreen else AccentRed,
-                                            fontWeight = FontWeight.Bold,
-                                            fontSize = 12.sp
-                                        ),
-                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
-                                    )
-                                }
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(6.dp))
-
-                        if (budget > 0) {
+                Column(modifier = Modifier.padding(14.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
                             Text(
-                                text = if (remainingBudget >= 0) "Remaining to Reach Budget Limit" else "Over Budget Limit By",
-                                style = MaterialTheme.typography.labelSmall.copy(color = SoftWhite.copy(alpha = 0.7f), fontSize = 12.sp)
+                                text = "Household Total Expenses",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    color = MutedSlate,
+                                    fontWeight = FontWeight.Medium,
+                                    fontSize = 12.sp
+                                )
                             )
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
-                                text = CurrencyHelper.format(if (remainingBudget >= 0) remainingBudget else -remainingBudget, currencySymbol),
+                                text = CurrencyHelper.format(summary.totalPublicCost, currencySymbol),
                                 style = MaterialTheme.typography.titleLarge.copy(
                                     fontWeight = FontWeight.ExtraBold,
-                                    color = if (remainingBudget >= 0) PureWhite else Color(0xFFFF8A80),
-                                    fontSize = 20.sp
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    fontSize = 22.sp
                                 )
                             )
-
-                            Spacer(modifier = Modifier.height(6.dp))
-
-                            val fraction = (spentThisMonth / budget).toFloat().coerceIn(0f, 1f)
-                            LinearProgressIndicator(
-                                progress = { fraction },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(5.dp)
-                                    .clip(RoundedCornerShape(3.dp)),
-                                color = if (remainingBudget >= 0) AccentCyan else AccentRed,
-                                trackColor = SoftWhite.copy(alpha = 0.2f)
-                            )
-
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Text(
-                                    text = "Spent: ${CurrencyHelper.format(spentThisMonth, currencySymbol)}",
-                                    style = MaterialTheme.typography.bodySmall.copy(color = SoftWhite.copy(alpha = 0.8f), fontSize = 12.sp)
-                                )
-                                Text(
-                                    text = "Target: ${CurrencyHelper.format(budget, currencySymbol)}",
-                                    style = MaterialTheme.typography.bodySmall.copy(color = SoftWhite.copy(alpha = 0.8f), fontSize = 12.sp)
+                        }
+                        Surface(
+                            shape = CircleShape,
+                            color = AccentBlue.copy(alpha = 0.12f),
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Default.TrendingDown,
+                                    contentDescription = null,
+                                    tint = AccentBlue,
+                                    modifier = Modifier.size(18.dp)
                                 )
                             }
-                        } else {
-                            Text(
-                                text = "No Budget Limit Set",
-                                style = MaterialTheme.typography.titleSmall.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    color = PureWhite
-                                )
-                            )
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                text = "Spent this month: ${CurrencyHelper.format(spentThisMonth, currencySymbol)}",
-                                style = MaterialTheme.typography.bodySmall.copy(color = SoftWhite.copy(alpha = 0.8f), fontSize = 14.sp)
-                            )
                         }
                     }
                 }
@@ -736,9 +662,15 @@ fun DashboardSummaryStackedBarChartCard(
     // Max total for scaling bars
     val maxTotal = remember(months, summary, isVaultActive) {
         months.maxOfOrNull { month ->
-            val pub = summary.publicMonthlyTrend[month] ?: 0.0
-            val priv = if (isVaultActive) summary.privateMonthlyTrend[month] ?: 0.0 else 0.0
-            pub + priv
+            val pubCost = summary.publicMonthlyTrend[month] ?: 0.0
+            val privCost = if (isVaultActive) summary.privateMonthlyTrend[month] ?: 0.0 else 0.0
+            val spend = pubCost + privCost
+            
+            val pubInc = summary.publicIncomeMonthlyTrend[month] ?: 0.0
+            val privInc = if (isVaultActive) summary.privateIncomeMonthlyTrend[month] ?: 0.0 else 0.0
+            val income = pubInc + privInc
+            
+            maxOf(spend, income)
         }?.coerceAtLeast(1.0) ?: 1.0
     }
 
@@ -794,6 +726,7 @@ fun DashboardSummaryStackedBarChartCard(
                     LegendItem(color = AccentBlue, label = "Public")
                     if (isVaultActive) {
                         LegendItem(color = AccentOrange, label = "Private")
+                        LegendItem(color = AccentGreen, label = "Income")
                     }
                 }
             }
@@ -805,7 +738,7 @@ fun DashboardSummaryStackedBarChartCard(
                 state = lazyListState,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(120.dp),
+                    .height(140.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.Bottom,
                 contentPadding = PaddingValues(horizontal = 4.dp)
@@ -813,14 +746,20 @@ fun DashboardSummaryStackedBarChartCard(
                 items(months, key = { it }) { monthKey ->
                     val pubCost = summary.publicMonthlyTrend[monthKey] ?: 0.0
                     val privCost = if (isVaultActive) summary.privateMonthlyTrend[monthKey] ?: 0.0 else 0.0
-                    val monthTotal = pubCost + privCost
+                    val monthTotalSpend = pubCost + privCost
+                    
+                    val pubIncome = summary.publicIncomeMonthlyTrend[monthKey] ?: 0.0
+                    val privIncome = if (isVaultActive) summary.privateIncomeMonthlyTrend[monthKey] ?: 0.0 else 0.0
+                    val monthTotalIncome = pubIncome + privIncome
+                    
                     val isCurrentMonth = (monthKey == currentMonthKey)
 
                     MonthlyStackedBar(
                         monthLabel = formatMonthShortLabel(monthKey),
                         publicAmount = pubCost,
                         privateAmount = privCost,
-                        totalAmount = monthTotal,
+                        totalAmount = monthTotalSpend,
+                        incomeAmount = if (isVaultActive) monthTotalIncome else 0.0,
                         maxAmount = maxTotal,
                         currencySymbol = currencySymbol,
                         isVaultActive = isVaultActive,
@@ -838,6 +777,7 @@ private fun MonthlyStackedBar(
     publicAmount: Double,
     privateAmount: Double,
     totalAmount: Double,
+    incomeAmount: Double = 0.0,
     maxAmount: Double,
     currencySymbol: String,
     isVaultActive: Boolean,
@@ -848,105 +788,154 @@ private fun MonthlyStackedBar(
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Bottom,
-        modifier = Modifier.width(44.dp)
+        modifier = Modifier.width(if (isVaultActive) 70.dp else 44.dp)
     ) {
-        // Total amount text above the bar
-        if (totalAmount > 0) {
-            Text(
-                text = CurrencyHelper.format(totalAmount, currencySymbol),
-                style = MaterialTheme.typography.labelSmall.copy(
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 9.sp,
-                    color = if (isCurrentMonth) AccentBlue else MaterialTheme.colorScheme.onSurface
-                ),
-                maxLines = 1,
-                overflow = TextOverflow.Clip,
-                textAlign = TextAlign.Center
-            )
-            Spacer(modifier = Modifier.height(2.dp))
+        // Amount text above the bars
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.Center
+        ) {
+            if (totalAmount > 0) {
+                Text(
+                    text = CurrencyHelper.format(totalAmount, currencySymbol),
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 8.sp,
+                        color = if (isCurrentMonth) AccentBlue else MaterialTheme.colorScheme.onSurface
+                    ),
+                    maxLines = 1,
+                    overflow = TextOverflow.Clip,
+                    textAlign = TextAlign.Center
+                )
+            }
+            if (isVaultActive && incomeAmount > 0) {
+                if (totalAmount > 0) Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = CurrencyHelper.format(incomeAmount, currencySymbol),
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 8.sp,
+                        color = AccentGreen
+                    ),
+                    maxLines = 1,
+                    overflow = TextOverflow.Clip,
+                    textAlign = TextAlign.Center
+                )
+            }
+        }
+        
+        Spacer(modifier = Modifier.height(2.dp))
 
-            val rawFraction = (totalAmount / maxAmount).toFloat()
-            val scaledHeight = (maxBarHeight * rawFraction).coerceIn(16.dp, maxBarHeight)
+        Row(
+            modifier = Modifier.height(maxBarHeight),
+            verticalAlignment = Alignment.Bottom,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            // Expense Bar
+            if (totalAmount > 0) {
+                val rawFraction = (totalAmount / maxAmount).toFloat()
+                val scaledHeight = (maxBarHeight * rawFraction).coerceIn(16.dp, maxBarHeight)
 
-            Box(
-                modifier = Modifier
-                    .width(32.dp)
-                    .height(scaledHeight)
-                    .clip(RoundedCornerShape(topStart = 6.dp, topEnd = 6.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
-            ) {
-                Column(modifier = Modifier.fillMaxSize()) {
-                    // Private segment (Orange) on top if active and present
-                    if (isVaultActive && privateAmount > 0) {
-                        val privWeight = (privateAmount / totalAmount).toFloat().coerceIn(0.12f, 0.88f)
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .weight(if (publicAmount > 0) privWeight else 1f)
-                                .background(AccentOrange),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = CurrencyHelper.format(privateAmount, currencySymbol),
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    color = Color.White,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 8.sp
-                                ),
-                                textAlign = TextAlign.Center,
-                                maxLines = 1,
-                                overflow = TextOverflow.Visible,
+                Box(
+                    modifier = Modifier
+                        .width(28.dp)
+                        .height(scaledHeight)
+                        .clip(RoundedCornerShape(topStart = 6.dp, topEnd = 6.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
+                ) {
+                    Column(modifier = Modifier.fillMaxSize()) {
+                        if (isVaultActive && privateAmount > 0) {
+                            val privWeight = (privateAmount / totalAmount).toFloat().coerceIn(0.12f, 0.88f)
+                            Box(
                                 modifier = Modifier
-                                    .rotate(-45f)
-                                    .padding(horizontal = 2.dp)
-                                    .align(Alignment.Center)
-                            )
+                                    .fillMaxWidth()
+                                    .weight(if (publicAmount > 0) privWeight else 1f)
+                                    .background(AccentOrange),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = CurrencyHelper.format(privateAmount, currencySymbol),
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        color = Color.White,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 7.sp
+                                    ),
+                                    textAlign = TextAlign.Center,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Visible,
+                                    modifier = Modifier.rotate(-45f).align(Alignment.Center)
+                                )
+                            }
                         }
-                    }
 
-                    // Public segment (Blue) on bottom (or full bar if private == 0)
-                    if (publicAmount > 0) {
-                        val pubWeight = (publicAmount / totalAmount).toFloat().coerceIn(0.12f, 0.88f)
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .weight(if (isVaultActive && privateAmount > 0) pubWeight else 1f)
-                                .background(AccentBlue),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = CurrencyHelper.format(publicAmount, currencySymbol),
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    color = Color.White,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 8.sp
-                                ),
-                                textAlign = TextAlign.Center,
-                                maxLines = 1,
-                                overflow = TextOverflow.Visible,
+                        if (publicAmount > 0) {
+                            val pubWeight = (publicAmount / totalAmount).toFloat().coerceIn(0.12f, 0.88f)
+                            Box(
                                 modifier = Modifier
-                                    .rotate(-45f)
-                                    .padding(horizontal = 2.dp)
-                                    .align(Alignment.Center)
-                            )
+                                    .fillMaxWidth()
+                                    .weight(if (isVaultActive && privateAmount > 0) pubWeight else 1f)
+                                    .background(AccentBlue),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = CurrencyHelper.format(publicAmount, currencySymbol),
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        color = Color.White,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 7.sp
+                                    ),
+                                    textAlign = TextAlign.Center,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Visible,
+                                    modifier = Modifier.rotate(-45f).align(Alignment.Center)
+                                )
+                            }
                         }
                     }
                 }
+            } else if (incomeAmount <= 0) {
+                // Empty placeholder only if no income either
+                Box(
+                    modifier = Modifier
+                        .width(18.dp)
+                        .height(4.dp)
+                        .clip(RoundedCornerShape(2.dp))
+                        .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.25f))
+                )
             }
-        } else {
-            // Empty placeholder line for months with zero cost
-            Box(
-                modifier = Modifier
-                    .width(18.dp)
-                    .height(4.dp)
-                    .clip(RoundedCornerShape(2.dp))
-                    .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.25f))
-            )
+
+            // Income Bar (Only in Private Mode)
+            if (isVaultActive && incomeAmount > 0) {
+                val rawIncFraction = (incomeAmount / maxAmount).toFloat()
+                val scaledIncHeight = (maxBarHeight * rawIncFraction).coerceIn(16.dp, maxBarHeight)
+
+                Box(
+                    modifier = Modifier
+                        .width(28.dp)
+                        .height(scaledIncHeight)
+                        .clip(RoundedCornerShape(topStart = 6.dp, topEnd = 6.dp))
+                        .background(AccentGreen),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = CurrencyHelper.format(incomeAmount, currencySymbol),
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 7.sp
+                        ),
+                        textAlign = TextAlign.Center,
+                        maxLines = 1,
+                        overflow = TextOverflow.Visible,
+                        modifier = Modifier.rotate(-45f).align(Alignment.Center)
+                    )
+                }
+            }
         }
 
         Spacer(modifier = Modifier.height(4.dp))
 
-        // Month label below bar
+        // Month label below bars
         Text(
             text = monthLabel,
             style = MaterialTheme.typography.labelSmall.copy(
@@ -1003,13 +992,14 @@ fun TotalExpensesSoFarCard(
             ) {
                 Column {
                     Text(
-                        text = "Total So Far",
+                        text = "Total Expenses So Far",
                         style = MaterialTheme.typography.labelSmall.copy(
                             color = MutedSlate,
                             fontWeight = FontWeight.Medium,
                             fontSize = 12.sp
                         )
                     )
+                    Spacer(modifier = Modifier.height(2.dp))
                     Text(
                         text = CurrencyHelper.format(summary.totalCost, currencySymbol),
                         style = MaterialTheme.typography.titleLarge.copy(
@@ -1025,7 +1015,7 @@ fun TotalExpensesSoFarCard(
                     color = AccentBlue.copy(alpha = 0.1f)
                 ) {
                     Text(
-                        text = "Expense Summary",
+                        text = "Financial Summary",
                         style = MaterialTheme.typography.labelSmall.copy(
                             color = AccentBlue,
                             fontWeight = FontWeight.Bold,
@@ -1045,15 +1035,15 @@ fun TotalExpensesSoFarCard(
             )
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Second Line: This Year and This Month in 2-column layout
+            // Second Line: Total Income and This Month in 2-column layout
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                // This Year Cost
+                // Total Income
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "This Year",
+                        text = "Total Income",
                         style = MaterialTheme.typography.labelSmall.copy(
                             color = MutedSlate,
                             fontWeight = FontWeight.Medium,
@@ -1062,10 +1052,10 @@ fun TotalExpensesSoFarCard(
                     )
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
-                        text = CurrencyHelper.format(summary.currentYearCost, currencySymbol),
+                        text = CurrencyHelper.format(summary.totalIncome, currencySymbol),
                         style = MaterialTheme.typography.titleMedium.copy(
                             fontWeight = FontWeight.Bold,
-                            color = AccentBlue,
+                            color = AccentGreen,
                             fontSize = 16.sp
                         )
                     )
